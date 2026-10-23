@@ -1,0 +1,5110 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<title>CintyezOS</title>
+<script>
+  (function () {
+    var pref = 'system';
+    try { pref = localStorage.getItem('cintyez.theme') || 'system'; } catch (e) {}
+    /* Android 外壳会把系统明暗作为 systemDark=1/0 带进来；浏览器里退回 media query */
+    var q = location.search;
+    var hostDark = q.indexOf('systemDark=1') >= 0 ? true : (q.indexOf('systemDark=0') >= 0 ? false : null);
+    var dark = pref === 'dark' ||
+      (pref === 'system' && (hostDark !== null ? hostDark : window.matchMedia('(prefers-color-scheme: dark)').matches));
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  })();
+</script>
+<style>
+/* =========================================================
+   主题变量
+   ========================================================= */
+:root{
+  --bg:#f4f4f1;
+  --fg:#0a0a0c;
+  --fg-2:rgba(10,10,12,.52);
+  --fg-3:rgba(10,10,12,.26);
+  --line:rgba(0,0,0,.08);
+  --card:rgba(255,255,255,.72);
+  --card-bd:rgba(0,0,0,.065);
+  --shadow:0 12px 38px rgba(20,22,28,.08);
+  --glow:rgba(112,150,210,.13);
+  --ui:rgba(0,0,0,.055);
+  --scrim:rgba(0,0,0,.26);
+  --sel-ring:#17181b;
+
+  /* 能力节点：玻璃片 / 单色符号 */
+  --node-bg:rgba(255,255,255,.62);
+  --node-bd:rgba(10,12,16,.14);
+  --node-ink:rgba(16,18,24,.86);
+  --node-sh:0 1px 0 rgba(255,255,255,.8) inset,0 8px 22px rgba(20,24,34,.09);
+  --node-tint:14%;
+
+  /* Kemon 焰色 */
+  --flame-ca:#c2563e;
+  --flame-na:#c99a36;
+  --flame-k:#8f7cc4;
+  --flame-cu:#3d948c;
+  --flame-ag:#dfe9f4;
+
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --ease-drawer:cubic-bezier(.32,.72,0,1);
+  --grain:.03;
+}
+[data-theme="dark"]{
+  --bg:#030304;
+  --fg:#f5f5f7;
+  --fg-2:rgba(245,245,247,.50);
+  --fg-3:rgba(245,245,247,.24);
+  --line:rgba(255,255,255,.10);
+  --card:rgba(26,27,31,.66);
+  --card-bd:rgba(255,255,255,.075);
+  --shadow:0 14px 44px rgba(0,0,0,.5);
+  --glow:rgba(130,168,224,.12);
+  --ui:rgba(255,255,255,.06);
+  --scrim:rgba(0,0,0,.4);
+  --sel-ring:#eef4fb;
+
+  --node-bg:rgba(255,255,255,.045);
+  --node-bd:rgba(255,255,255,.13);
+  --node-ink:rgba(244,247,252,.9);
+  --node-sh:0 1px 0 rgba(255,255,255,.07) inset,0 8px 26px rgba(0,0,0,.36);
+  --node-tint:17%;
+
+  --flame-ca:#d87258;
+  --flame-na:#e0b65a;
+  --flame-k:#a894dd;
+  --flame-cu:#5fb6ad;
+  --flame-ag:#e8f1fb;
+
+  --grain:.045;
+}
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+body{
+  background:var(--bg);
+  color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased;
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+  overscroll-behavior:none;
+  transition:background .4s ease,color .4s ease;
+}
+#app{position:fixed;inset:0;overflow:hidden;}
+
+/* 细颗粒：让大面积纯色不再像塑料 */
+#grain{
+  position:fixed;inset:0;z-index:200;
+  pointer-events:none;opacity:var(--grain);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:180px 180px;
+}
+
+.screen{
+  position:absolute;inset:0;
+  opacity:0;visibility:hidden;
+  transition-property:opacity;
+  transition-duration:550ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+.screen.on{opacity:1;visibility:visible;}
+
+#setBtn{
+  position:fixed;z-index:70;
+  top:calc(14px + env(safe-area-inset-top));right:16px;
+  width:34px;height:34px;border-radius:50%;
+  border:1px solid var(--line);
+  background:var(--ui);
+  color:var(--fg-2);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  opacity:0;pointer-events:none;
+  transition-property:opacity,transform,color,background;
+  transition-duration:300ms,180ms,300ms,300ms;
+  transition-timing-function:var(--ease-out);
+}
+#setBtn.show{opacity:1;pointer-events:auto;}
+#setBtn:active{transform:scale(.92);}
+#setBtn svg{width:16px;height:16px;display:block;}
+
+/* =========================================================
+   1. 锁屏
+   ========================================================= */
+#lockInner{
+  position:absolute;inset:0;z-index:1;
+  padding:0 18px;
+  transition-property:transform,opacity,filter;
+  transition-duration:500ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+  will-change:transform,opacity;
+}
+#lock::after{
+  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(120% 58% at 50% 104%,var(--glow),transparent 72%);
+}
+
+/* 空白捕获层：expanded / detail 时全屏接管空白点击 */
+.blank-catcher{
+  position:absolute;inset:0;z-index:0;
+  pointer-events:none;
+  transition-property:opacity;
+  transition-duration:200ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+#lockInner.mod-exp .blank-catcher{pointer-events:auto;}
+#lockInner.mod-exp .lock-status,
+#lockInner.mod-exp .lock-clock,
+#lockInner.mod-exp .notif-area,
+#lockInner.mod-exp .lock-foot{pointer-events:none;}
+#lockInner.mod-exp .notice{pointer-events:auto;}
+#lockInner.mod-exp .g-label.hit{pointer-events:auto;}
+
+.lock-status{
+  padding-top:calc(16px + env(safe-area-inset-top));
+  display:flex;justify-content:space-between;align-items:center;
+  font-size:12px;letter-spacing:.04em;color:var(--fg-2);
+  padding-right:56px;
+}
+.lock-status .brand{
+  font-family:var(--mono);font-size:9.5px;font-weight:500;
+  letter-spacing:.22em;color:var(--fg-2);
+}
+.lock-clock{margin-top:5vh;text-align:center;}
+.lock-time{
+  font-size:clamp(62px,19vw,88px);
+  font-weight:200;
+  letter-spacing:-.035em;
+  line-height:1;
+  font-variant-numeric:tabular-nums;
+  font-feature-settings:"tnum";
+}
+.lock-date{margin-top:10px;font-size:13px;color:var(--fg-2);letter-spacing:.1em;}
+
+.notif-area{
+  position:absolute;left:18px;right:18px;
+  top:calc(28vh + 14px);bottom:calc(118px + env(safe-area-inset-bottom));
+  transition-property:transform;
+  transition-duration:400ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 84%,transparent 100%);
+  mask-image:linear-gradient(to bottom,#000 0,#000 84%,transparent 100%);
+}
+.notif-scroll{
+  position:absolute;inset:0;overflow:visible;
+  /* 纵向 pan 交给浏览器（滚动），横向仍交给自定义手势（左滑整理 / 右滑返回） */
+  touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+}
+.notif-area.scrolling .notif-scroll{
+  overflow-y:auto;overflow-x:hidden;
+  touch-action:pan-y;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  scrollbar-width:none;
+}
+.notif-area.scrolling .notif-scroll::-webkit-scrollbar{width:0;height:0;}
+.scroll-pad{width:1px;height:0;pointer-events:none;}
+
+.g-label{
+  position:absolute;left:2px;right:0;top:0;height:18px;
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;letter-spacing:.14em;
+  opacity:0;transform:translateY(6px);
+  transition-property:transform,opacity,filter;
+  transition-duration:600ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+  pointer-events:none;
+  z-index:260;
+}
+.g-label::after{
+  content:'';position:absolute;left:-10px;right:-10px;top:-10px;bottom:-30px;
+}
+.g-label.hit{pointer-events:auto;cursor:pointer;}
+.g-label.hit:active{filter:brightness(1.35);}
+.g-label b{font-weight:600;color:var(--fg-3);}
+.g-dot{width:5px;height:5px;border-radius:50%;background:currentColor;}
+
+.expand-head{
+  position:absolute;left:-4px;right:-4px;top:0;z-index:300;
+  height:34px;
+  display:flex;align-items:center;gap:8px;
+  padding:0 4px;
+  background:linear-gradient(to bottom,var(--bg) 62%,transparent);
+  opacity:0;transform:translateY(-8px);
+  pointer-events:none;
+  transition-property:opacity,transform;
+  transition-duration:240ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+}
+.expand-head.on{opacity:1;transform:none;pointer-events:auto;}
+.eh-spacer{flex:1;}
+.eh-back{
+  height:24px;padding:0 9px;flex:0 0 auto;
+  border:0;border-radius:999px;
+  background:var(--ui);color:var(--fg-2);
+  font:inherit;font-size:10.5px;letter-spacing:.08em;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition-property:transform,background;
+  transition-duration:160ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+.eh-back:active{transform:scale(.92);}
+.eh-dot{width:6px;height:6px;border-radius:50%;}
+.eh-name{font-size:12px;font-weight:600;letter-spacing:.1em;}
+.eh-count{font-size:10px;letter-spacing:.14em;color:var(--fg-3);margin-right:8px;}
+
+.notice{
+  position:absolute;left:0;right:0;top:0;
+  height:72px;
+  border-radius:18px;
+  background:var(--card);
+  border:1px solid var(--card-bd);
+  backdrop-filter:blur(26px) saturate(160%);
+  -webkit-backdrop-filter:blur(26px) saturate(160%);
+  box-shadow:var(--shadow);
+  padding:9px 12px;
+  display:flex;align-items:center;gap:11px;
+  transform-origin:50% 50%;
+  transition-property:transform,opacity;
+  transition-duration:820ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+  will-change:transform,opacity;
+  overflow:hidden;
+  cursor:pointer;
+  /* 防止长按弹出系统菜单/选中文字抢掉点击 */
+  -webkit-touch-callout:none;
+  -webkit-user-select:none;
+  user-select:none;
+}
+.notice.is-detail{
+  height:auto;min-height:132px;
+  padding:16px 18px;align-items:flex-start;
+  border-radius:22px;
+}
+.n-icon{
+  width:38px;height:38px;border-radius:12px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--node-bg);
+  border:1px solid var(--node-bd);
+  color:color-mix(in srgb, var(--tint,var(--fg)) 60%, var(--fg));
+  box-shadow:0 1px 0 rgba(255,255,255,.24) inset;
+}
+.glyph{display:block;overflow:visible;}
+.n-icon .glyph{width:18px;height:18px;}
+.notice.is-detail .n-icon{width:46px;height:46px;border-radius:14px;}
+.notice.is-detail .n-icon .glyph{width:21px;height:21px;}
+.n-body{flex:1;min-width:0;}
+.n-head{display:flex;justify-content:space-between;align-items:baseline;font-size:10.5px;color:var(--fg-2);letter-spacing:.04em;}
+.n-title{font-size:13px;font-weight:600;margin-top:3px;letter-spacing:.01em;}
+.notice.is-detail .n-title{font-size:17px;margin-top:6px;letter-spacing:.005em;}
+
+.n-sum{
+  font-size:12px;color:var(--fg-2);margin-top:2px;line-height:1.3;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.notice.is-detail .n-sum{display:none;}
+
+/* 展开体：grid-template-rows 0fr -> 1fr */
+.n-text-wrap{
+  display:grid;
+  grid-template-rows:0fr;
+  transition-property:grid-template-rows;
+  transition-duration:300ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+}
+.notice.is-detail .n-text-wrap{grid-template-rows:1fr;}
+.n-text-wrap > .n-text{min-height:0;overflow:hidden;}
+.n-text{
+  font-size:13.5px;color:var(--fg);line-height:1.62;
+  white-space:normal;word-break:break-word;
+  padding-top:2px;
+}
+
+.lock-foot{
+  position:absolute;left:0;right:0;bottom:calc(26px + env(safe-area-inset-bottom));
+  display:flex;flex-direction:column;align-items:center;gap:16px;
+  /* 上滑解锁的专用热区：交给 JS 接管，浏览器不要插手 */
+  touch-action:none;
+}
+.swipe-hint{font-size:10.5px;letter-spacing:.2em;color:var(--fg-2);text-align:center;line-height:2;}
+.arrow-up{
+  width:16px;height:16px;color:var(--fg-2);
+  animation:floatUp 2200ms cubic-bezier(.45,0,.55,1) infinite;
+}
+@keyframes floatUp{0%,100%{transform:translateY(0);opacity:.4}50%{transform:translateY(-6px);opacity:1}}
+.home-bar{width:126px;height:5px;border-radius:3px;background:var(--fg-3);}
+
+/* =========================================================
+   2. 开机：物理波场
+   ========================================================= */
+#bootFx{
+  position:fixed;inset:0;z-index:40;
+  pointer-events:none;opacity:0;
+  transition-property:opacity;
+  transition-duration:400ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+#bootFx.on{opacity:1;}
+
+/* =========================================================
+   3. 主屏
+   ========================================================= */
+#home{z-index:30;}
+#home::after{
+  content:'';position:absolute;left:50%;bottom:6%;
+  width:130vw;height:78vw;transform:translateX(-50%);
+  background:radial-gradient(closest-side,var(--glow),transparent 72%);
+  pointer-events:none;
+}
+.home-status{
+  position:absolute;left:20px;right:20px;top:calc(16px + env(safe-area-inset-top));
+  display:flex;justify-content:space-between;align-items:center;
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;
+  color:var(--fg-3);pointer-events:none;
+}
+.home-status b{font-weight:500;color:var(--fg-2);letter-spacing:.1em;}
+.hs-right{
+  position:relative;
+  display:flex;align-items:center;gap:6px;color:var(--fg-2);
+  padding:6px 2px;margin:-6px -2px;
+  border:0;background:none;font:inherit;letter-spacing:inherit;
+  cursor:pointer;pointer-events:auto;
+  transition-property:color,transform;
+  transition-duration:200ms,160ms;
+  transition-timing-function:var(--ease-out);
+}
+.hs-right:active{transform:scale(.96);color:var(--fg);}
+.hs-right::after{content:'';position:absolute;inset:-9px -10px;}
+.hs-right .hs-caret{width:9px;height:9px;opacity:.5;margin-left:-1px;}
+.hs-dot{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--flame-ca);box-shadow:0 0 8px var(--flame-ca);
+  transition:background .3s ease,box-shadow .3s ease;
+}
+.hs-right.ok .hs-dot{background:var(--flame-cu);box-shadow:0 0 8px var(--flame-cu);}
+.home-head{
+  position:absolute;left:0;right:0;top:24vh;
+  padding:0 30px;text-align:center;
+}
+.prompt-line{
+  font-size:clamp(24px,6.6vw,32px);
+  font-weight:250;
+  letter-spacing:.01em;
+  line-height:1.45;
+  min-height:1.45em;
+}
+.caret{
+  display:inline-block;width:2px;height:.95em;
+  background:var(--fg);vertical-align:-.12em;margin-left:4px;
+  animation:blink 1050ms steps(1) infinite;
+}
+@keyframes blink{0%,49%{opacity:1}50%,100%{opacity:0}}
+.prompt-line.done .caret{display:none;}
+.prompt-sub{
+  margin-top:22px;font-size:12.5px;line-height:1.9;color:var(--fg-2);
+  opacity:0;transform:translateY(8px);
+  transition-property:opacity,transform;
+  transition-duration:900ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+  letter-spacing:.03em;
+}
+.prompt-sub.on{opacity:1;transform:none;}
+.prompt-sub em{font-style:normal;color:var(--fg);}
+
+.home-foot{
+  position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom));
+  padding:0 18px;
+  display:flex;flex-direction:column;align-items:center;gap:20px;
+}
+
+.orb{
+  position:relative;width:62px;height:62px;flex:0 0 auto;
+  border:0;background:none;padding:0;
+  cursor:pointer;
+  -webkit-tap-highlight-color:transparent;
+}
+.orb-halo{
+  position:absolute;left:-34px;top:-34px;right:-34px;bottom:-34px;
+  border-radius:50%;
+  background:radial-gradient(circle,rgba(214,232,255,.42) 0%,rgba(150,180,225,.12) 44%,rgba(150,180,225,0) 70%);
+  filter:blur(7px);
+  animation:haloBreath 6200ms cubic-bezier(.45,0,.55,1) infinite;
+  pointer-events:none;
+}
+/* 银白液态金属：Kemon 的“记录介质”底色，不再是蓝紫 AI 球 */
+.orb-body{
+  position:absolute;inset:0;border-radius:50%;
+  background:
+    radial-gradient(circle at 32% 24%,rgba(255,255,255,.99),rgba(255,255,255,0) 42%),
+    radial-gradient(circle at 68% 82%,rgba(168,196,230,.52),rgba(168,196,230,0) 62%),
+    radial-gradient(circle at 50% 50%,#ffffff 0%,#e9f0f8 26%,#b7c5d8 58%,#56657a 82%,#27313f 100%);
+  box-shadow:
+    inset 0 -10px 18px rgba(24,34,50,.52),
+    inset 0 8px 14px rgba(255,255,255,.82),
+    0 10px 34px rgba(172,206,248,.26);
+  animation:bodyBreath 6200ms cubic-bezier(.45,0,.55,1) infinite;
+  pointer-events:none;
+}
+/* 发梢焰色：只在银白表面上留一道极细的金属焰 */
+.orb-rim{
+  position:absolute;inset:-1px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 206deg,
+    rgba(255,255,255,0),rgba(194,86,62,.75) 44deg,
+    rgba(201,154,54,.62) 96deg,rgba(143,124,196,.6) 154deg,
+    rgba(61,148,140,.75) 224deg,rgba(255,255,255,0) 300deg);
+  -webkit-mask-image:radial-gradient(farthest-side,transparent calc(100% - 2.2px),#000 calc(100% - 2.2px));
+  mask-image:radial-gradient(farthest-side,transparent calc(100% - 2.2px),#000 calc(100% - 2.2px));
+  opacity:.72;
+  animation:rimTurn 24000ms linear infinite;
+}
+.orb-ring{
+  position:absolute;inset:0;border-radius:50%;pointer-events:none;
+  border:1px solid rgba(214,230,248,.34);
+  animation:ringOut 6200ms cubic-bezier(.2,.62,.28,1) infinite;
+}
+.orb-ring.d2{animation-delay:3100ms;}
+.orb:active .orb-halo{filter:blur(7px) brightness(1.5);}
+
+@keyframes haloBreath{
+  0%,100%{transform:scale(.94);opacity:.5;}
+  50%{transform:scale(1.06);opacity:.9;}
+}
+@keyframes bodyBreath{
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.04);}
+}
+@keyframes rimTurn{
+  0%{transform:rotate(0deg);opacity:.4;}
+  50%{opacity:.7;}
+  100%{transform:rotate(360deg);opacity:.4;}
+}
+@keyframes ringOut{
+  0%{transform:scale(.92);opacity:0;}
+  14%{opacity:.45;}
+  72%{transform:scale(2.25);opacity:0;}
+  100%{transform:scale(2.25);opacity:0;}
+}
+
+.input-dock{
+  width:100%;
+  display:flex;align-items:center;gap:10px;
+  padding:13px 14px;
+  border-radius:17px;
+  background:var(--card);
+  border:1px solid var(--card-bd);
+  backdrop-filter:blur(26px) saturate(160%);
+  -webkit-backdrop-filter:blur(26px) saturate(160%);
+  box-shadow:var(--shadow);
+  transform:translateY(160%);
+  opacity:0;
+  transition-property:transform,opacity,border-color,box-shadow;
+  transition-duration:1000ms,700ms,200ms,200ms;
+  transition-timing-function:cubic-bezier(.16,1,.3,1),cubic-bezier(.4,0,.2,1),ease-out,ease-out;
+}
+.input-dock.up{transform:none;opacity:1;}
+.input-dock:focus-within{
+  border-color:color-mix(in srgb,var(--fg) 20%,transparent);
+  box-shadow:var(--shadow),0 0 0 3px color-mix(in srgb,var(--fg) 5%,transparent);
+}
+#cmd{
+  flex:1;min-width:0;background:none;border:0;outline:none;
+  color:var(--fg);font:inherit;font-size:14px;letter-spacing:.02em;
+  /* 移动端要 ≥16px，否则 iOS 聚焦时会自动放大整个页面 → 触摸坐标全部偏移 */
+}
+@media (max-width: 560px){
+  #cmd{font-size:16px;}
+}
+#cmd::placeholder{color:var(--fg-3);}
+.send{
+  width:28px;height:28px;border-radius:50%;flex:0 0 auto;
+  border:0;background:var(--ui);color:var(--fg-2);
+  font-size:13px;line-height:1;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition-property:transform,background,color;
+  transition-duration:160ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+.input-dock:has(#cmd:not(:placeholder-shown)) .send{
+  background:var(--fg);color:var(--bg);
+}
+.send:active{transform:scale(.9);}
+.agent-chips{
+  display:flex;gap:7px;flex-wrap:wrap;justify-content:center;
+  min-height:0;max-height:0;overflow:hidden;
+  transition-property:max-height;
+  transition-duration:450ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+}
+.agent-chips.on{max-height:80px;}
+.agent-chips:empty{display:none;}
+.chip{
+  display:flex;align-items:center;gap:6px;
+  padding:5px 10px 5px 6px;border-radius:999px;
+  background:var(--ui);border:1px solid var(--line);
+  font-size:11px;color:var(--fg-2);letter-spacing:.03em;
+}
+.chip i{
+  width:18px;height:18px;border-radius:50%;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--node-bg);border:1px solid var(--node-bd);
+}
+.chip i .glyph{width:11px;height:11px;opacity:.85;}
+.chip i{color:color-mix(in srgb,var(--tint,var(--fg)) 55%,var(--fg-2));}
+.chip b{font-weight:600;color:var(--fg);}
+.home-hint{
+  font-size:9.5px;letter-spacing:.22em;color:var(--fg-2);
+  opacity:0;transition-property:opacity;transition-duration:900ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+  margin-top:-6px;
+}
+#home.on .home-hint{opacity:1;transition-delay:1100ms;}
+
+/* =========================================================
+   4. App 矩阵（摄像机轨道）
+   ========================================================= */
+#matrix{z-index:60;touch-action:none;}
+#mViewport{
+  position:absolute;inset:0;overflow:hidden;
+  touch-action:none;z-index:2;
+}
+#mScene{
+  position:absolute;left:50%;top:50%;
+  width:0;height:0;
+  will-change:transform;
+}
+/* 中心凸透镜的取景环：只在视觉上提示“中心会被放大” */
+.m-reticle{
+  position:absolute;left:50%;top:50%;
+  width:348px;height:348px;z-index:1;
+  transform:translate(-50%,-50%);
+  color:var(--fg);opacity:.13;
+  pointer-events:none;
+  transition:opacity .5s var(--ease-out);
+}
+#matrix.has-sel .m-reticle{opacity:.28;}
+.app{
+  position:absolute;left:0;top:0;
+  border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;
+  /* 入场动画由 JS 驱动（scale 0 → 1），这里给一个非零兜底值 */
+  transform:translate3d(0,0,0) translate(-50%,-50%) scale(.6);
+  will-change:transform;
+  cursor:pointer;
+  color:color-mix(in srgb,var(--tint,var(--fg)) 30%,var(--node-ink));
+  background-color:var(--node-bg);
+  background-image:radial-gradient(circle at 50% 118%,
+    color-mix(in srgb, var(--tint,transparent) var(--node-tint), transparent),
+    transparent 64%);
+  border:1px solid var(--node-bd);
+  box-shadow:var(--node-sh);
+  transition-property:background-color,color,border-color,box-shadow;
+  transition-duration:260ms;
+  transition-timing-function:var(--ease-out);
+}
+.app .glyph{width:48%;height:48%;opacity:.96;}
+.app.hover:not(.sel){outline:1px solid var(--fg-3);outline-offset:3px;}
+
+/* 聚焦环：只切 class，不做逐帧写入；只动 transform / opacity */
+.app::before{
+  content:'';position:absolute;inset:-10px;border-radius:50%;
+  border:1.5px solid rgba(160,205,255,0);
+  pointer-events:none;
+  opacity:0;
+  transform:scale(.86);
+  transition-property:opacity,transform,border-color;
+  transition-duration:260ms;
+  transition-timing-function:cubic-bezier(.22,1.06,.36,1);
+}
+.app.sel::before{
+  border-color:var(--sel-ring);
+  opacity:1;
+  transform:scale(1);
+}
+/* 选中项必须压在邻居之上：core 节点在 DOM 里最先绘制，不抬层会被后加的外环盖住 */
+.app.sel{
+  z-index:24;
+  background-color:var(--fg);
+  background-image:none;
+  color:var(--bg);
+  border-color:transparent;
+  box-shadow:0 16px 48px rgba(0,0,0,.34);
+}
+.app.core.sel::after{animation:none;opacity:0;}
+
+/* Kemon 本体：矩阵中心的银白奇点，不再用微信当核心 */
+.app.core{
+  color:#0b0e13;
+  background-color:transparent;
+  background-image:
+    radial-gradient(circle at 32% 24%,#ffffff 0%,rgba(255,255,255,0) 45%),
+    radial-gradient(circle at 54% 58%,#eef4fb 0%,#c7d3e1 38%,#8b9caf 68%,#3b4656 100%);
+  border-color:rgba(255,255,255,.44);
+  box-shadow:
+    inset 0 -12px 24px rgba(20,30,46,.52),
+    inset 0 10px 16px rgba(255,255,255,.78),
+    0 0 50px rgba(190,220,255,.26),
+    0 20px 54px rgba(0,0,0,.3);
+}
+.core-flame{
+  position:absolute;inset:-1px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 208deg,
+    rgba(255,255,255,0),rgba(194,86,62,.68) 52deg,
+    rgba(201,154,54,.58) 108deg,rgba(143,124,196,.55) 168deg,
+    rgba(61,148,140,.68) 236deg,rgba(255,255,255,0) 312deg);
+  -webkit-mask-image:radial-gradient(farthest-side,transparent calc(100% - 2.6px),#000 calc(100% - 2.6px));
+  mask-image:radial-gradient(farthest-side,transparent calc(100% - 2.6px),#000 calc(100% - 2.6px));
+  opacity:.78;
+  animation:coreTurn 22000ms linear infinite;
+}
+@keyframes coreTurn{to{transform:rotate(360deg);}}
+.core-mark{width:30%;height:30%;display:block;opacity:.58;}
+.core-mark svg{width:100%;height:100%;display:block;}
+@media (prefers-reduced-motion:reduce){
+  .app::before{transition-duration:0ms;}
+  .core-flame{animation:none;}
+}
+.app.core::after{
+  content:'';position:absolute;inset:-9px;border-radius:50%;
+  border:1px solid rgba(205,226,248,.4);
+  animation:ringOut 5200ms cubic-bezier(.2,.62,.28,1) infinite;
+}
+.m-top{
+  position:absolute;top:calc(20px + env(safe-area-inset-top));left:0;right:0;
+  text-align:center;pointer-events:none;z-index:3;
+}
+.m-title{font-family:var(--mono);font-size:10px;letter-spacing:.28em;color:var(--fg-2);}
+.m-sub{
+  margin-top:7px;font-size:10px;letter-spacing:.16em;color:var(--fg-2);
+  opacity:0;transition-property:opacity;transition-duration:400ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+.m-sub.on{opacity:1;}
+.m-hint{
+  position:absolute;bottom:calc(24px + env(safe-area-inset-bottom));left:0;right:0;
+  text-align:center;font-size:9.5px;letter-spacing:.18em;color:var(--fg-2);
+  opacity:.8;pointer-events:none;z-index:3;
+}
+
+.menu-scrim{
+  position:fixed;inset:0;z-index:75;
+  background:var(--scrim);
+  backdrop-filter:blur(2px);
+  -webkit-backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;
+  transition-property:opacity;
+  transition-duration:220ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+.menu-scrim.on{opacity:1;pointer-events:auto;}
+
+.app-menu{
+  position:absolute;z-index:80;
+  min-width:158px;
+  padding:6px;
+  border-radius:16px;
+  background:var(--card);
+  border:1px solid var(--card-bd);
+  backdrop-filter:blur(30px) saturate(170%);
+  -webkit-backdrop-filter:blur(30px) saturate(170%);
+  box-shadow:0 18px 50px rgba(0,0,0,.42);
+  opacity:0;
+  transform:scale(.94) translateY(4px);
+  pointer-events:none;
+  transition-property:opacity,transform;
+  transition-duration:160ms;
+  transition-timing-function:cubic-bezier(.3,0,.7,.2);
+  will-change:opacity,transform;
+}
+.app-menu.on{
+  opacity:1;transform:none;pointer-events:auto;
+  transition-duration:280ms;
+  transition-timing-function:cubic-bezier(.34,1.56,.64,1);
+}
+.am-head{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 10px 10px;
+  font-size:12px;font-weight:600;letter-spacing:.02em;
+}
+.am-head i{
+  width:18px;height:18px;
+  display:flex;align-items:center;justify-content:center;
+}
+.am-head i .glyph{width:16px;height:16px;}
+.app-menu button{
+  display:block;width:100%;
+  padding:10px 12px;border:0;border-radius:11px;
+  background:none;color:var(--fg);
+  font:inherit;font-size:12.5px;text-align:left;
+  cursor:pointer;letter-spacing:.02em;
+  transition-property:background,transform;
+  transition-duration:140ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+/* hover 只在真鼠标下生效，触摸设备不会留下粘滞 hover */
+@media (hover:hover) and (pointer:fine){
+  .app-menu button:hover{background:var(--ui);}
+}
+.app-menu button:active{background:var(--ui);transform:scale(.985);}
+.app-menu button small{color:var(--fg-3);font-size:10px;margin-left:6px;}
+.app-menu.on > *{animation:menuItemIn 240ms cubic-bezier(.22,1.06,.36,1) backwards;}
+.app-menu.on > *:nth-child(1){animation-delay:0ms;}
+.app-menu.on > *:nth-child(2){animation-delay:35ms;}
+.app-menu.on > *:nth-child(3){animation-delay:70ms;}
+@keyframes menuItemIn{
+  from{opacity:0;transform:translateY(8px);}
+  to{opacity:1;transform:none;}
+}
+
+.launch{
+  position:fixed;inset:0;z-index:90;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--bg);
+  clip-path:circle(0% at 50% 50%);
+  opacity:0;pointer-events:none;
+  transition-property:clip-path,opacity;
+  transition-duration:680ms,400ms;
+  transition-timing-function:cubic-bezier(.4,0,.2,1);
+}
+.launch::before{
+  content:'';position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 50% 44%,var(--launch-tint,transparent),transparent 58%);
+}
+.launch.on{clip-path:circle(150% at 50% 50%);opacity:1;pointer-events:auto;}
+.launch-inner{position:relative;display:flex;flex-direction:column;align-items:center;gap:16px;}
+.launch-icon{
+  width:84px;height:84px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  color:color-mix(in srgb,var(--tint,var(--fg)) 55%,var(--node-ink));
+  background-color:var(--node-bg);
+  background-image:radial-gradient(circle at 50% 118%,
+    color-mix(in srgb,var(--tint,transparent) var(--node-tint),transparent),
+    transparent 64%);
+  border:1px solid var(--node-bd);
+  box-shadow:0 16px 54px rgba(0,0,0,.3),0 1px 0 rgba(255,255,255,.3) inset;
+}
+.launch-icon .glyph{width:36px;height:36px;}
+.launch-name{font-size:19px;font-weight:500;letter-spacing:.02em;}
+.launch-sub{font-family:var(--mono);font-size:9.5px;color:var(--fg-2);letter-spacing:.16em;}
+
+/* =========================================================
+   5. 系统设置（系统层，不属于 App 矩阵）
+   ========================================================= */
+#edgeZone{
+  position:fixed;right:0;top:88px;bottom:108px;width:22px;
+  z-index:105;touch-action:none;pointer-events:none;
+}
+#edgeZone.on{pointer-events:auto;}
+
+.set-scrim{
+  position:fixed;inset:0;z-index:120;
+  background:var(--scrim);
+  backdrop-filter:blur(12px) saturate(120%);
+  -webkit-backdrop-filter:blur(12px) saturate(120%);
+  opacity:0;pointer-events:none;
+  transition:opacity .34s var(--ease-out);
+}
+.set-scrim.on{opacity:1;pointer-events:auto;}
+
+.settings{
+  position:fixed;top:0;right:0;bottom:0;z-index:125;
+  width:min(88vw,408px);
+  display:flex;flex-direction:column;
+  background:var(--bg);
+  border-left:1px solid var(--line);
+  box-shadow:-36px 0 90px rgba(0,0,0,.3);
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+  transform:translateX(100%);
+  transition:transform .44s var(--ease-drawer);
+  will-change:transform;
+}
+.settings.on{transform:none;}
+.settings.dragging{transition:none;}
+
+.set-grab{
+  height:26px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  touch-action:none;cursor:grab;
+}
+.set-grab span{width:36px;height:3px;border-radius:2px;background:var(--fg-3);opacity:.8;}
+
+.set-head{padding:4px 22px 14px;flex:0 0 auto;}
+.set-kicker{font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:var(--fg-2);}
+.set-title-row{display:flex;align-items:flex-end;justify-content:space-between;margin-top:8px;}
+.set-title-row h2{font-size:30px;font-weight:250;letter-spacing:-.015em;line-height:1;}
+.set-close{
+  height:30px;padding:0 13px;border-radius:999px;
+  border:1px solid var(--line);background:var(--ui);color:var(--fg);
+  font:inherit;font-size:12px;letter-spacing:.02em;cursor:pointer;
+  transition:transform .16s var(--ease-out),background .2s;
+}
+.set-close:active{transform:scale(.95);}
+
+.set-scroll{
+  flex:1;overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 18px 30px;
+  scrollbar-width:none;
+}
+.set-scroll::-webkit-scrollbar{width:0;height:0;}
+
+.set-sec{
+  margin-top:22px;
+  opacity:0;transform:translateY(10px);
+  transition:opacity .35s ease,transform .5s var(--ease-drawer);
+}
+.settings.on .set-sec{opacity:1;transform:none;}
+.settings.on .set-sec:nth-child(1){transition-delay:.06s;}
+.settings.on .set-sec:nth-child(2){transition-delay:.12s;}
+.settings.on .set-sec:nth-child(3){transition-delay:.18s;}
+
+.set-label{
+  display:flex;align-items:center;gap:8px;
+  padding:0 4px 8px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--fg-2);
+}
+.set-badge{
+  margin-left:auto;padding:2px 7px;border-radius:999px;
+  border:1px solid var(--line);color:var(--fg-3);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.04em;
+}
+.set-badge.ok{
+  color:var(--flame-cu);
+  border-color:color-mix(in srgb,var(--flame-cu) 34%,transparent);
+  background:color-mix(in srgb,var(--flame-cu) 8%,transparent);
+}
+
+.set-card{
+  padding:6px 14px;
+  border-radius:18px;
+  background:var(--card);
+  border:1px solid var(--card-bd);
+  box-shadow:var(--shadow);
+}
+
+.field{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 0;
+  border-bottom:1px solid var(--line);
+}
+.field:last-of-type{border-bottom:none;}
+.field > span{flex:0 0 60px;font-size:12px;color:var(--fg-2);letter-spacing:.03em;}
+.field input[type=text],
+.field input[type=url],
+.field input[type=password]{
+  flex:1;min-width:0;border:0;background:none;outline:none;
+  color:var(--fg);font:inherit;font-size:13px;text-align:right;letter-spacing:.02em;
+}
+.field input::placeholder{color:var(--fg-3);}
+.field input:focus{color:var(--flame-cu);}
+.field b{
+  width:34px;flex:0 0 auto;text-align:right;
+  font-family:var(--mono);font-size:10px;font-weight:400;color:var(--fg-2);
+}
+.field input[type=range]{
+  flex:1;min-width:0;height:2px;border-radius:2px;outline:none;
+  appearance:none;-webkit-appearance:none;background:var(--fg-3);
+}
+.field input[type=range]::-webkit-slider-thumb{
+  appearance:none;-webkit-appearance:none;
+  width:17px;height:17px;border-radius:50%;
+  background:var(--fg);border:3px solid var(--bg);
+  box-shadow:0 1px 5px rgba(0,0,0,.28);cursor:pointer;
+}
+.field input[type=range]::-moz-range-thumb{
+  width:12px;height:12px;border-radius:50%;
+  background:var(--fg);border:3px solid var(--bg);cursor:pointer;
+}
+
+.set-actions{display:flex;align-items:center;gap:10px;padding:12px 0 9px;}
+.btn-primary{
+  height:34px;padding:0 15px;border-radius:999px;border:0;
+  background:var(--fg);color:var(--bg);
+  font:inherit;font-size:12px;font-weight:500;letter-spacing:.02em;
+  cursor:pointer;
+  transition:transform .16s var(--ease-out),opacity .2s;
+}
+.btn-primary:active{transform:scale(.96);}
+.btn-primary[disabled]{opacity:.45;pointer-events:none;}
+.set-hint{font-size:10px;line-height:1.5;color:var(--fg-2);letter-spacing:.02em;}
+.set-hint.ok{color:var(--flame-cu);}
+.set-hint.bad{color:var(--flame-ca);}
+.set-note{
+  margin:10px 6px 0;
+  font-size:10.5px;line-height:1.7;color:var(--fg-2);letter-spacing:.02em;
+}
+
+.seg{
+  display:flex;gap:4px;padding:4px;margin:8px 0 10px;
+  border-radius:12px;background:var(--ui);
+}
+.seg button{
+  flex:1;height:32px;border:0;border-radius:9px;
+  background:none;color:var(--fg-2);
+  font:inherit;font-size:12px;letter-spacing:.02em;cursor:pointer;
+  transition:background .2s,color .2s,box-shadow .2s;
+}
+.seg button.on{background:var(--bg);color:var(--fg);box-shadow:0 1px 4px rgba(0,0,0,.12);}
+.set-line{height:1px;background:var(--line);margin:2px 0;}
+.set-static{margin-left:auto;font-family:var(--mono);font-size:10px;color:var(--fg-3);}
+
+.about{padding:4px 14px;}
+.about-row{
+  display:flex;justify-content:space-between;align-items:baseline;
+  padding:10px 0;border-bottom:1px solid var(--line);
+  font-size:12px;color:var(--fg-2);
+}
+.about-row:last-child{border-bottom:0;}
+.about-row b{
+  font-family:var(--mono);font-size:10.5px;font-weight:400;
+  letter-spacing:.03em;color:var(--fg);
+}
+
+/* 快捷控制：launcher 自己的系统层，不承载 Android 设置本体 */
+.q-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px;}
+.q-tile{
+  display:flex;flex-direction:column;align-items:flex-start;gap:10px;
+  min-height:88px;padding:12px 13px;
+  border-radius:16px;border:1px solid var(--card-bd);
+  background:var(--card);color:var(--fg);
+  font:inherit;text-align:left;cursor:pointer;
+  box-shadow:var(--shadow);
+  transition:transform .16s var(--ease-out),background .24s,border-color .24s;
+}
+.q-tile:active{transform:scale(.975);}
+.q-tile:focus-visible{outline:2px solid var(--fg);outline-offset:2px;}
+.q-ic{
+  width:30px;height:30px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ui);color:var(--fg-2);
+  transition:background .24s,color .24s;
+}
+.q-ic svg{width:15px;height:15px;display:block;fill:currentColor;}
+.q-txt{min-width:0;width:100%;}
+.q-txt b{display:block;font-size:12.5px;font-weight:500;letter-spacing:.01em;line-height:1.1;}
+.q-txt small{
+  display:block;margin-top:3px;font-size:9.5px;color:var(--fg-2);letter-spacing:.02em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.q-tile.on{
+  border-color:color-mix(in srgb,var(--q,var(--flame-cu)) 32%,transparent);
+  background:linear-gradient(160deg,
+    color-mix(in srgb,var(--q,var(--flame-cu)) 12%,var(--card)),
+    var(--card));
+}
+.q-tile.on .q-ic{
+  color:var(--q,var(--flame-cu));
+  background:color-mix(in srgb,var(--q,var(--flame-cu)) 14%,transparent);
+}
+
+.q-more{
+  display:flex;align-items:center;gap:11px;width:100%;
+  margin-top:8px;padding:10px 13px;
+  border-radius:16px;border:1px solid var(--card-bd);
+  background:var(--card);color:var(--fg);
+  font:inherit;text-align:left;cursor:pointer;box-shadow:var(--shadow);
+  transition:transform .16s var(--ease-out),background .2s;
+}
+.q-more:active{transform:scale(.985);}
+.q-more:focus-visible{outline:2px solid var(--fg);outline-offset:2px;}
+.q-android{
+  width:34px;height:34px;border-radius:50%;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  color:#25945a;background:rgba(61,220,132,.14);
+  border:1px solid rgba(61,220,132,.2);
+}
+[data-theme="dark"] .q-android{color:#61df9b;background:rgba(61,220,132,.10);}
+.q-android svg{width:18px;height:18px;display:block;}
+.q-more-txt{flex:1;min-width:0;}
+.q-more-txt b{display:block;font-size:12.5px;font-weight:500;}
+.q-more-txt small{display:block;margin-top:2px;font-size:10px;color:var(--fg-2);}
+.q-ext{
+  flex:0 0 auto;padding:2px 7px;border-radius:999px;
+  border:1px solid var(--line);color:var(--fg-3);
+  font-family:var(--mono);font-size:8px;letter-spacing:.08em;
+}
+.q-chev{
+  width:14px;height:14px;flex:0 0 auto;color:var(--fg-3);
+  fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.settings.on .set-sec:nth-child(4){transition-delay:.24s;}
+
+/* =========================================================
+   5b. 更多设置：Android 风格彩蛋（独立于 CintyezOS 视觉体系）
+   ========================================================= */
+.droid{
+  --d-bg:#f2f3f7;
+  --d-card:#ffffff;
+  --d-fg:#14161b;
+  --d-2:rgba(20,22,27,.56);
+  --d-3:rgba(20,22,27,.32);
+  --d-line:rgba(20,22,27,.075);
+  --d-search:rgba(20,22,27,.055);
+  --d-press:rgba(20,22,27,.05);
+  --d-accent:#0b57d0;
+  --d-on-accent:#ffffff;
+  --d-outline:rgba(20,22,27,.22);
+  --d-switch-off:rgba(20,22,27,.12);
+  position:fixed;inset:0;z-index:140;
+  display:flex;flex-direction:column;
+  background:var(--d-bg);color:var(--d-fg);
+  font-family:"Roboto","Noto Sans SC","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei",sans-serif;
+  transform:translateX(100%);visibility:hidden;
+  transition:transform .4s var(--ease-drawer),visibility 0s linear .4s;
+  box-shadow:-30px 0 80px rgba(0,0,0,.28);
+  will-change:transform;
+}
+[data-theme="dark"] .droid{
+  --d-bg:#0e0f13;
+  --d-card:#1a1b20;
+  --d-fg:#e8e9ee;
+  --d-2:rgba(232,233,238,.58);
+  --d-3:rgba(232,233,238,.32);
+  --d-line:rgba(255,255,255,.09);
+  --d-search:rgba(255,255,255,.07);
+  --d-press:rgba(255,255,255,.07);
+  --d-accent:#a8c7fa;
+  --d-on-accent:#0a1020;
+  --d-outline:rgba(232,233,238,.28);
+  --d-switch-off:rgba(232,233,238,.15);
+}
+.droid.on{transform:none;visibility:visible;transition:transform .4s var(--ease-drawer),visibility 0s;}
+
+.d-sprite{position:absolute;width:0;height:0;overflow:hidden;}
+
+.d-status{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+  padding:calc(9px + env(safe-area-inset-top)) 22px 3px;
+  font-size:12px;font-weight:500;letter-spacing:.01em;color:var(--d-fg);
+}
+.d-status-r{display:flex;align-items:center;gap:6px;opacity:.82;}
+.d-status-r svg{width:13px;height:13px;display:block;fill:currentColor;}
+.d-status-r .d-batt{width:20px;}
+
+.d-body{position:relative;flex:1;min-height:0;overflow:hidden;}
+.d-main,.d-sub{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  background:var(--d-bg);
+}
+.d-main{transition:transform .34s var(--ease-drawer);}
+.droid.sub-open .d-main{transform:translateX(-15%);}
+.d-sub{
+  z-index:2;visibility:hidden;transform:translateX(100%);
+  transition:transform .34s var(--ease-drawer),visibility 0s linear .34s;
+  will-change:transform;
+}
+.d-sub.on{visibility:visible;transform:none;transition:transform .34s var(--ease-drawer),visibility 0s;}
+
+.d-top{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;
+  padding:4px 12px 6px;
+}
+.d-back{
+  width:40px;height:40px;flex:0 0 auto;border:0;border-radius:50%;
+  background:none;color:var(--d-fg);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:background .16s;
+}
+.d-back:active{background:var(--d-press);}
+.d-back svg{width:22px;height:22px;}
+.d-top h2{font-size:24px;font-weight:500;letter-spacing:-.01em;margin-left:4px;}
+
+.d-scroll{
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 16px calc(30px + env(safe-area-inset-bottom));
+  scrollbar-width:none;
+}
+.d-scroll::-webkit-scrollbar{width:0;height:0;}
+
+.d-search{
+  height:48px;border-radius:26px;background:var(--d-search);
+  display:flex;align-items:center;gap:10px;
+  padding:0 8px 0 16px;margin:2px 0 20px;
+  transition:background .2s,box-shadow .2s;
+}
+.d-search:focus-within{
+  background:var(--d-card);
+  box-shadow:0 0 0 2px var(--d-accent) inset,0 3px 14px rgba(0,0,0,.07);
+}
+.d-search > svg{width:19px;height:19px;flex:0 0 auto;fill:var(--d-2);}
+.d-search input{
+  flex:1;min-width:0;height:100%;border:0;background:none;outline:none;
+  font:inherit;font-size:15px;color:var(--d-fg);
+  user-select:text;-webkit-user-select:text;
+}
+.d-search input::placeholder{color:var(--d-2);}
+.d-clear{
+  width:30px;height:30px;flex:0 0 auto;border:0;border-radius:50%;
+  background:var(--d-3);color:var(--d-bg);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .15s;
+}
+.d-clear svg{width:14px;height:14px;}
+.d-search:has(input:not(:placeholder-shown)) .d-clear{opacity:1;pointer-events:auto;}
+
+.d-group{margin-bottom:16px;}
+.d-label{
+  padding:0 10px 8px;
+  font-size:11px;font-weight:500;letter-spacing:.06em;color:var(--d-2);
+}
+.d-card{
+  border-radius:22px;background:var(--d-card);
+  overflow:hidden;
+  box-shadow:0 1px 2px rgba(0,0,0,.035);
+}
+.d-row{
+  position:relative;width:100%;min-height:64px;
+  display:flex;align-items:center;gap:14px;
+  padding:10px 16px;
+  border:0;background:none;color:inherit;font:inherit;text-align:left;
+  cursor:pointer;transition:background .15s;
+}
+.d-row:active{background:var(--d-press);}
+.d-row.d-row-static{cursor:default;}
+.d-row.d-row-static:active{background:none;}
+.d-row + .d-row::before{
+  content:'';position:absolute;left:70px;right:0;top:0;height:1px;
+  background:var(--d-line);
+}
+.d-ic{
+  width:40px;height:40px;flex:0 0 auto;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ic-bg,rgba(95,99,104,.11));color:var(--ic,#5f6368);
+}
+.d-ic svg{width:21px;height:21px;fill:currentColor;}
+.d-ic.blue{--ic:#1a73e8;--ic-bg:rgba(26,115,232,.12);}
+.d-ic.red{--ic:#d93025;--ic-bg:rgba(217,48,37,.11);}
+.d-ic.green{--ic:#188038;--ic-bg:rgba(24,128,56,.12);}
+.d-ic.yellow{--ic:#a55a00;--ic-bg:rgba(249,171,0,.16);}
+.d-ic.orange{--ic:#c24f14;--ic-bg:rgba(232,113,10,.12);}
+.d-ic.purple{--ic:#7c3aed;--ic-bg:rgba(124,58,237,.11);}
+.d-ic.gray{--ic:#5f6368;--ic-bg:rgba(95,99,104,.11);}
+[data-theme="dark"] .d-ic.blue{--ic:#8ab4f8;--ic-bg:rgba(138,180,248,.14);}
+[data-theme="dark"] .d-ic.red{--ic:#f28b82;--ic-bg:rgba(242,139,130,.13);}
+[data-theme="dark"] .d-ic.green{--ic:#81c995;--ic-bg:rgba(129,201,149,.13);}
+[data-theme="dark"] .d-ic.yellow{--ic:#fdd663;--ic-bg:rgba(253,214,99,.13);}
+[data-theme="dark"] .d-ic.orange{--ic:#fcad70;--ic-bg:rgba(252,173,112,.13);}
+[data-theme="dark"] .d-ic.purple{--ic:#c58af9;--ic-bg:rgba(197,138,249,.14);}
+[data-theme="dark"] .d-ic.gray{--ic:#bdc1c6;--ic-bg:rgba(189,193,198,.12);}
+
+.d-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.d-txt b{
+  font-size:15px;font-weight:500;line-height:1.28;letter-spacing:.005em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.d-txt small{
+  font-size:12.5px;line-height:1.35;color:var(--d-2);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.d-chev{width:16px;height:16px;flex:0 0 auto;color:var(--d-3);}
+.d-check{width:20px;height:20px;flex:0 0 auto;color:var(--d-accent);}
+.d-row[data-net] .d-netcheck{opacity:0;transition:opacity .15s;}
+.d-row[data-net].is-connected .d-netcheck{opacity:1;}
+
+.d-kv{
+  position:relative;display:flex;align-items:baseline;justify-content:space-between;
+  gap:20px;padding:15px 16px;font-size:14px;
+}
+.d-kv + .d-kv::before{
+  content:'';position:absolute;left:16px;right:0;top:0;height:1px;background:var(--d-line);
+}
+.d-kv span{flex:0 0 auto;color:var(--d-2);}
+.d-kv b{font-weight:400;text-align:right;color:var(--d-fg);}
+
+.d-switch{
+  position:relative;width:52px;height:32px;flex:0 0 auto;
+  border-radius:999px;border:2px solid var(--d-outline);
+  background:transparent;cursor:pointer;padding:0;
+  transition:background .22s,border-color .22s;
+}
+.d-switch span{
+  position:absolute;top:50%;left:5px;width:16px;height:16px;border-radius:50%;
+  background:var(--d-2);transform:translateY(-50%);
+  transition:transform .22s var(--ease-out),width .22s var(--ease-out),height .22s var(--ease-out),background .22s,left .22s,right .22s;
+}
+.d-switch[aria-checked="true"]{background:var(--d-accent);border-color:var(--d-accent);}
+.d-switch[aria-checked="true"] span{
+  left:auto;right:4px;width:24px;height:24px;background:var(--d-on-accent);
+}
+
+.d-slider{display:flex;align-items:center;gap:13px;padding:14px 16px 10px;}
+.d-slider > svg{width:18px;height:18px;flex:0 0 auto;fill:var(--d-2);}
+.d-slider input{
+  flex:1;min-width:0;height:24px;margin:0;
+  appearance:none;-webkit-appearance:none;background:none;outline:none;cursor:pointer;
+}
+.d-slider input::-webkit-slider-runnable-track{
+  height:6px;border-radius:3px;
+  background:linear-gradient(to right,var(--d-accent) 0 var(--fill,100%),var(--d-line) var(--fill,100%) 100%);
+}
+.d-slider input::-webkit-slider-thumb{
+  appearance:none;-webkit-appearance:none;
+  width:20px;height:20px;margin-top:-7px;border-radius:50%;
+  background:var(--d-accent);border:0;box-shadow:0 1px 4px rgba(0,0,0,.22);
+}
+.d-slider input::-moz-range-track{height:6px;border-radius:3px;background:var(--d-line);}
+.d-slider input::-moz-range-progress{height:6px;border-radius:3px;background:var(--d-accent);}
+.d-slider input::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:50%;background:var(--d-accent);}
+
+.d-note{
+  margin:14px 8px 0;
+  font-size:11px;line-height:1.75;color:var(--d-3);
+}
+.d-empty{
+  display:none;flex-direction:column;align-items:center;gap:6px;
+  padding:52px 0 30px;text-align:center;color:var(--d-2);
+}
+.d-empty.on{display:flex;}
+.d-empty svg{width:30px;height:30px;fill:var(--d-3);margin-bottom:4px;}
+.d-empty b{font-size:14px;font-weight:500;color:var(--d-fg);}
+.d-empty span{font-size:12px;}
+
+.d-toast{
+  position:fixed;left:50%;bottom:calc(34px + env(safe-area-inset-bottom));z-index:30;
+  max-width:82vw;padding:11px 18px;border-radius:999px;
+  background:#303034;color:#f4f4f6;
+  font-size:13px;letter-spacing:.01em;white-space:nowrap;
+  opacity:0;pointer-events:none;transform:translate(-50%,14px);
+  transition:opacity .2s ease,transform .28s var(--ease-out);
+}
+.d-toast.on{opacity:1;transform:translate(-50%,0);}
+
+#screenDim{
+  position:fixed;inset:0;z-index:150;background:#000;
+  opacity:0;pointer-events:none;transition:opacity .12s linear;
+}
+
+/* =========================================================
+   6. Kemon 智能体（左缘滑出的会话入口）
+   ========================================================= */
+#leftEdgeZone{
+  position:fixed;left:0;top:88px;bottom:108px;width:22px;
+  z-index:105;touch-action:none;pointer-events:none;
+}
+#leftEdgeZone.on{pointer-events:auto;}
+
+.agent{
+  position:fixed;top:0;left:0;bottom:0;z-index:126;
+  width:min(91vw,392px);
+  display:flex;flex-direction:column;
+  background:var(--bg);
+  border-right:1px solid var(--line);
+  box-shadow:36px 0 90px rgba(0,0,0,.3);
+  transform:translateX(-100%);
+  transition:transform .44s var(--ease-drawer);
+  will-change:transform;
+  overflow:hidden;
+}
+.agent.on{transform:none;}
+.agent.dragging{transition:none;}
+
+.ag-view{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top);
+  background:var(--bg);
+}
+.ag-list-view{
+  transition:transform .34s var(--ease-drawer),opacity .22s ease,visibility 0s;
+}
+.agent.chat .ag-list-view{
+  transform:translateX(-16%);opacity:0;visibility:hidden;pointer-events:none;
+  transition:transform .34s var(--ease-drawer),opacity .2s ease,visibility 0s linear .34s;
+}
+.ag-chat-view{
+  visibility:hidden;transform:translateX(100%);
+  transition:transform .34s var(--ease-drawer),visibility 0s linear .34s;
+}
+.agent.chat .ag-chat-view{
+  visibility:visible;transform:none;
+  transition:transform .34s var(--ease-drawer),visibility 0s;
+}
+
+.ag-grab{
+  height:26px;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  touch-action:none;cursor:grab;
+}
+.ag-grab span{width:36px;height:3px;border-radius:2px;background:var(--fg-3);opacity:.8;}
+
+.ag-head{padding:4px 20px 12px;flex:0 0 auto;}
+.ag-kicker{font-family:var(--mono);font-size:9px;letter-spacing:.18em;color:var(--fg-2);}
+.ag-title-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:10px;}
+.ag-who{display:flex;align-items:center;gap:11px;min-width:0;}
+
+.ag-orb{
+  position:relative;width:38px;height:38px;flex:0 0 auto;border-radius:50%;
+  background:
+    radial-gradient(circle at 32% 24%,rgba(255,255,255,.99),rgba(255,255,255,0) 42%),
+    radial-gradient(circle at 68% 82%,rgba(168,196,230,.52),rgba(168,196,230,0) 62%),
+    radial-gradient(circle at 50% 50%,#ffffff 0%,#e9f0f8 26%,#b7c5d8 58%,#56657a 82%,#27313f 100%);
+  box-shadow:inset 0 -6px 11px rgba(24,34,50,.5),inset 0 5px 9px rgba(255,255,255,.8),0 6px 18px rgba(172,206,248,.24);
+}
+.ag-orb::after{
+  content:'';position:absolute;inset:-1px;border-radius:50%;pointer-events:none;
+  background:conic-gradient(from 206deg,
+    rgba(255,255,255,0),rgba(194,86,62,.75) 44deg,
+    rgba(201,154,54,.62) 96deg,rgba(143,124,196,.6) 154deg,
+    rgba(61,148,140,.75) 224deg,rgba(255,255,255,0) 300deg);
+  -webkit-mask-image:radial-gradient(farthest-side,transparent calc(100% - 1.8px),#000 calc(100% - 1.8px));
+  mask-image:radial-gradient(farthest-side,transparent calc(100% - 1.8px),#000 calc(100% - 1.8px));
+  opacity:.7;
+}
+.ag-who-txt{min-width:0;}
+.ag-who-txt h2{font-size:22px;font-weight:300;letter-spacing:-.012em;line-height:1.05;}
+.ag-state{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:10.5px;color:var(--fg-2);letter-spacing:.01em;}
+.ag-state i{
+  width:5px;height:5px;flex:0 0 auto;border-radius:50%;
+  background:var(--fg-3);
+  transition:background .3s,box-shadow .3s;
+}
+.ag-state.ok i{background:var(--flame-cu);box-shadow:0 0 0 3px color-mix(in srgb,var(--flame-cu) 16%,transparent);}
+
+.ag-scroll{
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  padding:2px 18px 20px;
+  scrollbar-width:none;
+}
+.ag-scroll::-webkit-scrollbar{width:0;height:0;}
+
+.ag-new{
+  display:flex;align-items:center;gap:12px;width:100%;
+  padding:13px 14px;border-radius:17px;
+  border:1px solid var(--card-bd);background:var(--card);color:var(--fg);
+  font:inherit;text-align:left;cursor:pointer;
+  box-shadow:var(--shadow);
+  transition:transform .16s var(--ease-out),background .2s;
+}
+.ag-new:active{transform:scale(.982);}
+.ag-new:focus-visible{outline:2px solid var(--fg);outline-offset:2px;}
+.ag-new-ic{
+  width:34px;height:34px;flex:0 0 auto;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--fg);color:var(--bg);
+  transition:transform .2s var(--ease-out);
+}
+.ag-new:active .ag-new-ic{transform:rotate(90deg);}
+.ag-new-ic svg{width:16px;height:16px;}
+.ag-new-txt{flex:1;min-width:0;}
+.ag-new-txt b{display:block;font-size:13.5px;font-weight:500;letter-spacing:.01em;}
+.ag-new-txt small{display:block;margin-top:2px;font-size:10.5px;color:var(--fg-2);}
+.ag-new-key{
+  flex:0 0 auto;font-family:var(--mono);font-size:8px;letter-spacing:.12em;color:var(--fg-3);
+}
+
+.ag-search{
+  display:flex;align-items:center;gap:9px;margin-top:10px;
+  padding:10px 12px;border-radius:12px;
+  background:var(--ui);border:1px solid transparent;
+  transition:background .2s,border-color .2s;
+}
+.ag-search:focus-within{background:var(--card);border-color:var(--card-bd);}
+.ag-search svg{
+  width:14px;height:14px;flex:0 0 auto;color:var(--fg-3);
+  fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.ag-search input{
+  flex:1;min-width:0;border:0;background:none;outline:none;
+  color:var(--fg);font:inherit;font-size:12px;letter-spacing:.01em;
+}
+.ag-search input::placeholder{color:var(--fg-3);}
+.ag-search input::-webkit-search-cancel-button{-webkit-appearance:none;display:none;}
+
+.ag-label{
+  padding:19px 4px 8px;
+  font-family:var(--mono);font-size:9px;letter-spacing:.16em;color:var(--fg-2);
+}
+.ag-ws{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;}
+.ag-ws::-webkit-scrollbar{display:none;}
+.ag-ws button{
+  flex:0 0 auto;display:flex;align-items:center;gap:6px;height:30px;padding:0 11px;
+  border-radius:999px;border:1px solid var(--line);background:var(--card);
+  color:var(--fg-2);font:inherit;font-size:11px;cursor:pointer;
+  transition:background .2s,color .2s,border-color .2s,transform .16s var(--ease-out);
+}
+.ag-ws button small{font-family:var(--mono);font-size:8.5px;opacity:.55;}
+.ag-ws button.on{background:var(--fg);border-color:var(--fg);color:var(--bg);}
+.ag-ws button.on small{opacity:.7;}
+.ag-ws button:active{transform:scale(.96);}
+.ag-ws button:focus-visible{outline:2px solid var(--fg);outline-offset:2px;}
+
+.ag-sessions{display:flex;flex-direction:column;gap:1px;}
+.ag-session{
+  display:flex;align-items:center;gap:11px;width:100%;
+  padding:10px 8px;border:0;border-radius:12px;
+  background:none;color:var(--fg);font:inherit;text-align:left;cursor:pointer;
+  transition:background .18s,transform .16s var(--ease-out);
+}
+.ag-session:active{background:var(--ui);transform:scale(.992);}
+.ag-session:focus-visible{outline:2px solid var(--fg);outline-offset:1px;}
+.ag-session-ic{
+  width:28px;height:28px;flex:0 0 auto;border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ui);border:1px solid var(--line);color:var(--fg-2);
+}
+.ag-session-ic svg{width:14px;height:14px;display:block;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+.ag-session-txt{flex:1;min-width:0;}
+.ag-session-txt b{
+  display:block;font-size:12.5px;font-weight:450;letter-spacing:.005em;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ag-session-txt small{
+  display:block;margin-top:3px;
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.04em;color:var(--fg-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.ag-session-chev{width:12px;height:12px;flex:0 0 auto;color:var(--fg-3);opacity:.4;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;transition:opacity .2s,transform .2s var(--ease-out);}
+.ag-session:hover .ag-session-chev{opacity:.85;transform:translateX(1px);}
+
+.ag-empty{
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  padding:34px 0 10px;color:var(--fg-2);font-size:11.5px;
+}
+.ag-empty[hidden]{display:none;}
+.ag-empty button{
+  height:30px;padding:0 13px;border-radius:999px;
+  border:1px solid var(--line);background:var(--card);color:var(--fg);
+  font:inherit;font-size:11px;cursor:pointer;
+}
+.ag-empty button:active{transform:scale(.96);}
+
+.ag-foot{
+  flex:0 0 auto;padding:8px 16px calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);
+  background:var(--bg);
+}
+.ag-tools{display:grid;grid-template-columns:repeat(4,1fr);gap:2px;padding:2px 0 8px;}
+.ag-tool{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:7px 0;border:0;border-radius:10px;
+  background:none;color:var(--fg-2);font:inherit;font-size:9.5px;letter-spacing:.02em;
+  cursor:pointer;
+  transition:background .18s,color .2s;
+}
+.ag-tool:active{background:var(--ui);color:var(--fg);}
+.ag-tool:focus-visible{outline:2px solid var(--fg);outline-offset:1px;}
+.ag-tool svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;}
+.ag-account{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:8px;border:0;border-radius:12px;
+  background:none;color:var(--fg);font:inherit;text-align:left;cursor:pointer;
+  transition:background .18s;
+}
+.ag-account:active{background:var(--ui);}
+.ag-account:focus-visible{outline:2px solid var(--fg);outline-offset:1px;}
+.ag-avatar{
+  width:30px;height:30px;flex:0 0 auto;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--mono);font-size:11px;font-weight:600;color:#1b2634;
+  background:radial-gradient(circle at 32% 24%,#fff,#dbe4ef 40%,#8e9cb1 78%,#4a5666);
+  box-shadow:inset 0 -4px 8px rgba(20,30,45,.35),inset 0 2px 4px #fff;
+}
+.ag-acc-txt{flex:1;min-width:0;}
+.ag-acc-txt b{display:block;font-size:12px;font-weight:500;}
+.ag-acc-txt small{display:block;margin-top:2px;font-size:9.5px;color:var(--fg-2);}
+.ag-gear{width:16px;height:16px;flex:0 0 auto;color:var(--fg-3);fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;}
+
+/* 对话视图 */
+.ag-chat-head{
+  flex:0 0 auto;display:flex;align-items:center;gap:8px;
+  padding:8px 12px 8px 10px;
+}
+.ag-back{
+  width:34px;height:34px;flex:0 0 auto;border:0;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--ui);color:var(--fg);cursor:pointer;
+  transition:transform .16s var(--ease-out),background .2s;
+}
+.ag-back:active{transform:scale(.93);}
+.ag-back:focus-visible{outline:2px solid var(--fg);outline-offset:2px;}
+.ag-back svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.ag-chat-title{flex:1;min-width:0;text-align:center;}
+.ag-chat-title b{display:block;font-size:12.5px;font-weight:500;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ag-chat-title small{display:block;margin-top:2px;font-family:var(--mono);font-size:8px;letter-spacing:.08em;color:var(--fg-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ag-thread{
+  flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+  display:flex;flex-direction:column;gap:9px;
+  padding:14px 16px 18px;
+  scrollbar-width:none;
+}
+.ag-thread::-webkit-scrollbar{width:0;}
+.ag-day{align-self:center;margin:2px 0 5px;font-family:var(--mono);font-size:8px;letter-spacing:.16em;color:var(--fg-3);}
+.ag-msg{
+  max-width:84%;padding:10px 13px;border-radius:16px;
+  font-size:12.5px;line-height:1.66;letter-spacing:.01em;
+  word-break:break-word;white-space:pre-wrap;
+}
+.ag-msg.k{
+  align-self:flex-start;border-bottom-left-radius:6px;
+  background:var(--ui);border:1px solid var(--line);color:var(--fg);
+}
+.ag-msg.u{
+  align-self:flex-end;border-bottom-right-radius:6px;
+  background:var(--fg);color:var(--bg);
+}
+.ag-msg.sys{
+  align-self:stretch;max-width:none;
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;border:1px dashed var(--line);border-radius:12px;
+  font-size:10.5px;line-height:1.5;color:var(--fg-2);
+  background:transparent;white-space:normal;
+}
+.ag-msg.sys button{
+  margin-left:auto;flex:0 0 auto;height:26px;padding:0 10px;
+  border-radius:999px;border:1px solid var(--line);
+  background:var(--card);color:var(--fg);
+  font:inherit;font-size:10px;cursor:pointer;
+}
+.ag-msg.sys button:active{transform:scale(.96);}
+.ag-sugs{display:flex;flex-wrap:wrap;gap:6px;align-self:flex-start;max-width:92%;margin-top:-1px;}
+.ag-sug{
+  height:28px;padding:0 11px;border-radius:999px;
+  border:1px solid var(--line);background:var(--card);color:var(--fg-2);
+  font:inherit;font-size:10.5px;cursor:pointer;
+  transition:transform .16s var(--ease-out),background .2s,color .2s;
+}
+.ag-sug:active{transform:scale(.96);background:var(--ui);color:var(--fg);}
+.ag-sug:focus-visible{outline:2px solid var(--fg);outline-offset:1px;}
+.ag-typing{display:flex;align-items:center;gap:4px;padding:13px 14px;}
+.ag-typing i{width:5px;height:5px;border-radius:50%;background:var(--fg-3);animation:agDot 1000ms ease-in-out infinite;}
+.ag-typing i:nth-child(2){animation-delay:140ms;}
+.ag-typing i:nth-child(3){animation-delay:280ms;}
+@keyframes agDot{
+  0%,100%{opacity:.35;transform:translateY(0);}
+  45%{opacity:1;transform:translateY(-2px);}
+}
+.ag-composer{
+  flex:0 0 auto;display:flex;align-items:flex-end;gap:8px;
+  margin:0 14px calc(10px + env(safe-area-inset-bottom));
+  padding:8px 8px 8px 14px;
+  border-radius:18px;border:1px solid var(--card-bd);
+  background:var(--card);box-shadow:var(--shadow);
+  transition:border-color .2s;
+}
+.ag-composer:focus-within{border-color:color-mix(in srgb,var(--fg) 16%,transparent);}
+.ag-composer textarea{
+  flex:1;min-width:0;height:32px;max-height:96px;
+  padding:8px 0;border:0;background:none;outline:none;resize:none;
+  color:var(--fg);font:inherit;font-size:13px;line-height:1.5;
+  scrollbar-width:none;
+}
+.ag-composer textarea::-webkit-scrollbar{display:none;}
+.ag-composer textarea::placeholder{color:var(--fg-3);}
+.ag-send{
+  width:32px;height:32px;flex:0 0 auto;border:0;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--fg);color:var(--bg);cursor:pointer;
+  transition:transform .16s var(--ease-out),opacity .2s;
+}
+.ag-send:active{transform:scale(.92);}
+.ag-send:disabled{opacity:.32;pointer-events:none;}
+.ag-send svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+
+.ag-toast{
+  position:absolute;left:50%;bottom:calc(148px + env(safe-area-inset-bottom));z-index:5;
+  max-width:82%;padding:9px 15px;border-radius:999px;
+  background:var(--fg);color:var(--bg);
+  font-size:11.5px;font-weight:500;letter-spacing:.01em;white-space:nowrap;
+  opacity:0;pointer-events:none;transform:translate(-50%,10px);
+  transition:opacity .18s ease,transform .26s var(--ease-out);
+}
+.agent.chat .ag-toast{bottom:calc(96px + env(safe-area-inset-bottom));}
+.ag-toast.on{opacity:1;transform:translate(-50%,0);}
+
+@media (max-height: 726px){
+  .notice{height:64px;padding:7px 11px;}
+  .n-icon{width:34px;height:34px;border-radius:10px;}
+  .n-icon .glyph{width:16px;height:16px;}
+  .n-title{font-size:12px;margin-top:2px;}
+  .n-sum{font-size:11px;}
+  .lock-time{font-size:clamp(52px,16vw,72px);}
+  .lock-clock{margin-top:3vh;}
+}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:1ms !important;
+    animation-iteration-count:1 !important;
+    transition-duration:1ms !important;
+    transition-delay:0ms !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============ 锁屏 ============ -->
+  <section id="lock" class="screen on">
+    <div id="lockInner">
+      <div class="blank-catcher" id="blankCatcher"></div>
+
+      <div class="lock-status">
+        <span class="brand">CINTYEZ OS</span>
+        <span id="statusDate">10月23日 星期五</span>
+      </div>
+
+      <div class="lock-clock">
+        <div class="lock-time" id="bigTime">09:41</div>
+        <div class="lock-date" id="bigDate">10月23日 星期五</div>
+      </div>
+
+      <div class="notif-area" id="notifArea">
+        <div class="expand-head" id="expandHead">
+          <span class="eh-dot" id="ehDot"></span>
+          <span class="eh-name" id="ehName">紧急</span>
+          <span class="eh-spacer"></span>
+          <span class="eh-count" id="ehCount">3 条</span>
+          <button class="eh-back" id="ehBack" aria-label="返回分组">&#8249; 返回</button>
+        </div>
+        <div class="notif-scroll" id="notifScroll">
+          <div class="scroll-pad" id="scrollPad"></div>
+        </div>
+      </div>
+
+      <div class="lock-foot">
+        <svg class="arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19V5M5 12l7-7 7 7" />
+        </svg>
+        <div class="swipe-hint" id="swipeHint">上滑解锁 · 左滑整理通知</div>
+        <div class="home-bar"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 开机波形 ============ -->
+  <canvas id="bootFx"></canvas>
+
+  <!-- ============ 主屏 ============ -->
+  <section id="home" class="screen">
+    <div class="home-status">
+      <span>CINTYEZ OS <b>0.1</b></span>
+      <button class="hs-right" id="homeKemon" type="button" aria-label="打开 Kemon 智能体">
+        <i class="hs-dot"></i><span>KEMON · 未接入</span>
+        <svg class="hs-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+    </div>
+    <div class="home-head">
+      <div class="prompt-line" id="promptLine"></div>
+      <div class="prompt-sub" id="promptSub"></div>
+    </div>
+    <div class="home-foot">
+      <div class="agent-chips" id="agentChips"></div>
+      <button class="orb" id="orb" aria-label="语音">
+        <span class="orb-halo"></span>
+        <span class="orb-body"></span>
+        <span class="orb-rim"></span>
+        <span class="orb-ring"></span>
+        <span class="orb-ring d2"></span>
+      </button>
+      <form class="input-dock" id="inputDock">
+        <input id="cmd" type="text" placeholder="描述你想要的，或直接说…" autocomplete="off" spellcheck="false" />
+        <button class="send" type="submit">&#8593;</button>
+      </form>
+      <div class="home-hint">三指展开矩阵 · 左缘 Kemon · 右缘设置</div>
+    </div>
+  </section>
+
+  <!-- ============ App 矩阵 ============ -->
+  <section id="matrix" class="screen">
+    <div id="mViewport">
+      <div id="mScene"></div>
+    </div>
+    <svg class="m-reticle" viewBox="0 0 348 348" fill="none" aria-hidden="true">
+      <circle cx="174" cy="174" r="168" stroke="currentColor" stroke-width=".7" stroke-dasharray="1.5 7" opacity=".8"/>
+      <path d="M174 6v8M174 334v8M6 174h8M334 174h8" stroke="currentColor" stroke-width="1.1"/>
+      <circle cx="174" cy="174" r="5.5" stroke="currentColor" stroke-width=".7" opacity=".55"/>
+    </svg>
+    <div class="m-top">
+      <div class="m-title">APP MATRIX</div>
+      <div class="m-sub" id="mSub">按重要度推算 · 31 个节点</div>
+    </div>
+    <div class="m-hint">拖动环视 · 单击聚焦 · 长按加为 Agent 对象</div>
+  </section>
+
+  <!-- ============ 遮罩 / 菜单 / 启动 ============ -->
+  <div class="menu-scrim" id="menuScrim"></div>
+
+  <div class="app-menu" id="appMenu">
+    <div class="am-head"><i id="amDot"></i><span id="amName">应用</span></div>
+    <button data-act="agent">加入 Agent 框<small>交给 AI 代你操作</small></button>
+    <button data-act="open">打开应用</button>
+  </div>
+
+  <div class="launch" id="launch">
+    <div class="launch-inner">
+      <div class="launch-icon" id="launchIcon"></div>
+      <div class="launch-name" id="launchName"></div>
+      <div class="launch-sub">启动中 · 由 KEMON 托管</div>
+    </div>
+  </div>
+
+  <button id="setBtn" title="系统设置" aria-label="系统设置">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <path d="M4 7h8M16 7h4M4 17h3M11 17h9"/>
+      <circle cx="14" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/>
+    </svg>
+  </button>
+
+  <div id="leftEdgeZone" aria-hidden="true"></div>
+  <div class="set-scrim" id="agScrim"></div>
+
+  <!-- ============ 左侧：Kemon 智能体 ============ -->
+  <aside class="agent" id="agent" aria-hidden="true" aria-label="Kemon 智能体">
+    <div class="ag-view ag-list-view" id="agList">
+      <div class="ag-grab" id="agGrab"><span></span></div>
+      <header class="ag-head">
+        <div class="ag-kicker">AGENT LAYER · KEMON</div>
+        <div class="ag-title-row">
+          <div class="ag-who">
+            <span class="ag-orb" aria-hidden="true"></span>
+            <div class="ag-who-txt">
+              <h2>Kemon</h2>
+              <div class="ag-state" id="agState"><i></i><span>本地智能体 · 模型未接入</span></div>
+            </div>
+          </div>
+          <button class="set-close" id="agClose" type="button">完成</button>
+        </div>
+      </header>
+      <div class="ag-scroll">
+        <button class="ag-new" id="agNew" type="button">
+          <span class="ag-new-ic">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+          </span>
+          <span class="ag-new-txt"><b>新的对话</b><small>从桌面、通知或一段记忆开始</small></span>
+          <span class="ag-new-key">NEW</span>
+        </button>
+        <label class="ag-search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/></svg>
+          <input id="agSearch" type="search" placeholder="搜索对话" autocomplete="off" spellcheck="false">
+        </label>
+        <div class="ag-label">工作区</div>
+        <div class="ag-ws" id="agWs"></div>
+        <div class="ag-label">最近</div>
+        <div class="ag-sessions" id="agSessions"></div>
+        <div class="ag-empty" id="agEmpty" hidden>
+          <span>没有匹配的对话</span>
+          <button id="agEmptyNew" type="button">开始新的对话</button>
+        </div>
+      </div>
+      <footer class="ag-foot">
+        <div class="ag-tools">
+          <button class="ag-tool" type="button" data-ag="记忆">
+            <svg viewBox="0 0 24 24"><path d="M6 4.5h12v15H6z"/><path d="M9.5 9h5M9.5 12.5h5M9.5 16h3"/></svg><span>记忆</span>
+          </button>
+          <button class="ag-tool" type="button" data-ag="技能">
+            <svg viewBox="0 0 24 24"><path d="m12 3.5 2.2 5.1 5.5.5-4.2 3.7 1.3 5.4-4.8-2.9-4.8 2.9 1.3-5.4-4.2-3.7 5.5-.5z"/></svg><span>技能</span>
+          </button>
+          <button class="ag-tool" type="button" data-ag="自动化">
+            <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h9M4 17h6"/><circle cx="18" cy="16.5" r="2.4"/><path d="M18 12.4v1.4M18 19.2v1.4"/></svg><span>自动化</span>
+          </button>
+          <button class="ag-tool" type="button" data-ag="更多">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg><span>更多</span>
+          </button>
+        </div>
+        <button class="ag-account" id="agAccount" type="button">
+          <span class="ag-avatar" aria-hidden="true">K</span>
+          <span class="ag-acc-txt"><b>Kemon Cintyez</b><small>本地智能体 · 数据留在设备</small></span>
+          <svg class="ag-gear" viewBox="0 0 24 24"><path d="M4 7h9M18.5 7H20M4 17h4.5M12.5 17H20"/><circle cx="15.5" cy="7" r="2.3"/><circle cx="10" cy="17" r="2.3"/></svg>
+        </button>
+      </footer>
+    </div>
+
+    <div class="ag-view ag-chat-view" id="agChat" aria-hidden="true">
+      <header class="ag-chat-head">
+        <button class="ag-back" id="agBack" type="button" aria-label="返回对话列表">
+          <svg viewBox="0 0 24 24"><path d="M19 12H5m0 0 6-6m-6 6 6 6"/></svg>
+        </button>
+        <div class="ag-chat-title"><b id="agChatTitle">新的对话</b><small id="agChatMeta">KEMON · 本地</small></div>
+        <button class="ag-back" id="agChatMore" type="button" aria-label="更多">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+        </button>
+      </header>
+      <div class="ag-thread" id="agThread"></div>
+      <form class="ag-composer" id="agForm">
+        <textarea id="agInput" rows="1" placeholder="给 Kemon 发消息…" aria-label="消息"></textarea>
+        <button class="ag-send" id="agSend" type="submit" aria-label="发送">
+          <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <div class="ag-toast" id="agToast"></div>
+  </aside>
+
+  <div id="edgeZone" aria-hidden="true"></div>
+  <div class="set-scrim" id="setScrim"></div>
+
+  <aside class="settings" id="settings" aria-hidden="true" aria-label="系统设置">
+    <div class="set-grab" id="setGrab"><span></span></div>
+    <header class="set-head">
+      <div class="set-kicker">LAUNCHER SYSTEM · 快捷与模型</div>
+      <div class="set-title-row">
+        <h2>设置</h2>
+        <button class="set-close" id="setClose">完成</button>
+      </div>
+    </header>
+
+    <div class="set-scroll">
+      <section class="set-sec">
+        <div class="set-label">快捷控制</div>
+        <div class="q-grid">
+          <button class="q-tile on" id="qWifi" type="button" aria-pressed="true" style="--q:var(--flame-cu)">
+            <span class="q-ic"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+            <span class="q-txt"><b>Wi-Fi</b><small id="qWifiSub">Cintyez-5G</small></span>
+          </button>
+          <button class="q-tile" id="qBt" type="button" aria-pressed="false" style="--q:var(--flame-k)">
+            <span class="q-ic"><svg viewBox="0 0 24 24"><use href="#di-bt"/></svg></span>
+            <span class="q-txt"><b>蓝牙</b><small id="qBtSub">已关闭</small></span>
+          </button>
+          <button class="q-tile" id="qDnd" type="button" aria-pressed="false" style="--q:var(--flame-na)">
+            <span class="q-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M20 14.4A8 8 0 0 1 9.6 4 8.5 8.5 0 1 0 20 14.4Z"/></svg></span>
+            <span class="q-txt"><b>勿扰</b><small id="qDndSub">通知正常</small></span>
+          </button>
+          <button class="q-tile on" id="qDark" type="button" aria-pressed="true" style="--q:var(--flame-ca)">
+            <span class="q-ic"><svg viewBox="0 0 24 24"><path d="M12 3.6a8.4 8.4 0 1 0 0 16.8 8.4 8.4 0 0 0 0-16.8Z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 3.6v16.8a8.4 8.4 0 0 0 0-16.8Z"/></svg></span>
+            <span class="q-txt"><b>深色</b><small id="qDarkSub">已开启</small></span>
+          </button>
+        </div>
+        <button class="q-more" id="moreSetBtn" type="button">
+          <span class="q-android"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 15.4v-3.1a5.5 5.5 0 0 1 11 0v3.1"/><path d="M5 15.4h14v3.7a1.3 1.3 0 0 1-1.3 1.3H6.3A1.3 1.3 0 0 1 5 19.1z"/><path d="M8.8 7.2 7.4 5M15.2 7.2 16.6 5"/><circle cx="9.8" cy="11.6" r=".7" fill="currentColor" stroke="none"/><circle cx="14.2" cy="11.6" r=".7" fill="currentColor" stroke="none"/></svg></span>
+          <span class="q-more-txt"><b>更多设置</b><small>打开 Android 系统设置</small></span>
+          <span class="q-ext">外部</span>
+          <svg class="q-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+        </button>
+      </section>
+
+      <section class="set-sec">
+        <div class="set-label">KEMON · 模型接入 <span class="set-badge" id="setBadge">未接入</span></div>
+        <div class="set-card">
+          <label class="field">
+            <span>接口地址</span>
+            <input id="cfgBase" type="url" inputmode="url" placeholder="https://api.openai.com/v1" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span>模型</span>
+            <input id="cfgModel" type="text" placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false">
+          </label>
+          <label class="field">
+            <span>API Key</span>
+            <input id="cfgKey" type="password" placeholder="sk-…" autocomplete="off">
+          </label>
+          <label class="field">
+            <span>温度</span>
+            <input id="cfgTemp" type="range" min="0" max="1" step="0.05" value="0.6">
+            <b id="cfgTempVal">0.60</b>
+          </label>
+          <div class="set-actions">
+            <button class="btn-primary" id="cfgTest">测试连接</button>
+            <span class="set-hint" id="cfgHint">仅保存在本机</span>
+          </div>
+        </div>
+        <p class="set-note">按 OpenAI 兼容格式预留。原型不会真的发起请求；桌面输入会从这里取配置。</p>
+      </section>
+
+      <section class="set-sec">
+        <div class="set-label">外观</div>
+        <div class="set-card">
+          <div class="seg" id="themeSeg">
+            <button data-theme-opt="light">浅色</button>
+            <button data-theme-opt="dark">深色</button>
+            <button data-theme-opt="system">跟随</button>
+          </div>
+          <div class="set-line"></div>
+          <div class="field">
+            <span>动效</span>
+            <span class="set-static">跟随系统</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="set-sec">
+        <div class="set-label">关于</div>
+        <div class="set-card about">
+          <div class="about-row"><span>系统</span><b>CintyezOS 0.1</b></div>
+          <div class="about-row"><span>主体</span><b>Kemon Cintyez</b></div>
+          <div class="about-row"><span>节点</span><b>31 + 1</b></div>
+        </div>
+        <p class="set-note">这个抽屉是 CintyezOS 的系统层，从右缘滑出；矩阵里的「设置」是另一个独立应用，会打开 Android 设置。</p>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ============ 更多设置：Android 风格彩蛋 ============ -->
+  <section class="droid" id="droid" aria-hidden="true" aria-label="更多设置">
+    <svg class="d-sprite" aria-hidden="true" focusable="false">
+      <symbol id="di-wifi" viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8 3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4 2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></symbol>
+      <symbol id="di-bt" viewBox="0 0 24 24"><path d="M17.71 7.71 12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/></symbol>
+      <symbol id="di-apps" viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></symbol>
+      <symbol id="di-bell" viewBox="0 0 24 24"><path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5S10.5 3.17 10.5 4v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z"/></symbol>
+      <symbol id="di-battery" viewBox="0 0 24 24"><path d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></symbol>
+      <symbol id="di-storage" viewBox="0 0 24 24"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></symbol>
+      <symbol id="di-sound" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></symbol>
+      <symbol id="di-display" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M11 1h2v3.2h-2zM11 19.8h2V23h-2zM1 11h3.2v2H1zM19.8 11H23v2h-3.2zM3.9 5.3l1.4-1.4 2.3 2.3-1.4 1.4zM16.4 17.8l1.4-1.4 2.3 2.3-1.4 1.4zM5.3 20.1l-1.4-1.4 2.3-2.3 1.4 1.4zM17.8 7.6l-1.4-1.4 2.3-2.3 1.4 1.4z"/></symbol>
+      <symbol id="di-shield" viewBox="0 0 24 24"><path d="M12 1 3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-1.2 15.5-3.6-3.6 1.4-1.4 2.2 2.2 4.8-4.8 1.4 1.4-6.2 6.2z"/></symbol>
+      <symbol id="di-pin" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></symbol>
+      <symbol id="di-info" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></symbol>
+      <symbol id="di-search" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></symbol>
+      <symbol id="di-chev" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="di-back" viewBox="0 0 24 24"><path d="M20 12H4m0 0 6-6m-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="di-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+      <symbol id="di-signal" viewBox="0 0 24 24"><path d="M2 22h20V2z"/></symbol>
+      <symbol id="di-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5L20 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+      <symbol id="di-batt-status" viewBox="0 0 24 24"><rect x="2" y="7.5" width="17" height="9" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.5"/><rect x="4.5" y="10" width="9" height="4" rx="1" fill="currentColor"/><path d="M21 10v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    </svg>
+
+    <div class="d-status">
+      <span id="droidTime">15:00</span>
+      <span class="d-status-r">
+        <svg viewBox="0 0 24 24"><use href="#di-signal"/></svg>
+        <svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg>
+        <svg class="d-batt" viewBox="0 0 24 24"><use href="#di-batt-status"/></svg>
+      </span>
+    </div>
+
+    <div class="d-body">
+      <div class="d-main" id="droidMain">
+        <header class="d-top">
+          <button class="d-back" id="droidClose" type="button" aria-label="返回桌面">
+            <svg viewBox="0 0 24 24"><use href="#di-back"/></svg>
+          </button>
+          <h2>设置</h2>
+        </header>
+
+        <div class="d-scroll">
+          <div class="d-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#di-search"/></svg>
+            <input id="droidSearch" type="text" placeholder="搜索设置" autocomplete="off" spellcheck="false" enterkeyhint="search">
+            <button class="d-clear" id="droidClear" type="button" aria-label="清除搜索">
+              <svg viewBox="0 0 24 24"><use href="#di-x"/></svg>
+            </button>
+          </div>
+
+          <section class="d-group">
+            <div class="d-label">连接</div>
+            <div class="d-card">
+              <button class="d-row" type="button" data-sub="wifi" data-title="网络和互联网">
+                <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                <span class="d-txt"><b>网络和互联网</b><small id="dSumWifi">Wi-Fi · 已连接 Cintyez-5G</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-toast="蓝牙设置还没有展开">
+                <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-bt"/></svg></span>
+                <span class="d-txt"><b>已连接的设备</b><small id="dSumBt">蓝牙 · Kemon Buds</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="d-group">
+            <div class="d-label">设备</div>
+            <div class="d-card">
+              <button class="d-row" type="button" data-toast="应用管理还没有展开">
+                <span class="d-ic yellow"><svg viewBox="0 0 24 24"><use href="#di-apps"/></svg></span>
+                <span class="d-txt"><b>应用</b><small>31 个应用 · 2 个可更新</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-toast="通知设置还没有展开">
+                <span class="d-ic red"><svg viewBox="0 0 24 24"><use href="#di-bell"/></svg></span>
+                <span class="d-txt"><b>通知</b><small>12 条未读消息</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-toast="电池详情还没有展开">
+                <span class="d-ic green"><svg viewBox="0 0 24 24"><use href="#di-battery"/></svg></span>
+                <span class="d-txt"><b>电池</b><small>87% · 约剩余 1 天</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-toast="存储详情还没有展开">
+                <span class="d-ic orange"><svg viewBox="0 0 24 24"><use href="#di-storage"/></svg></span>
+                <span class="d-txt"><b>存储</b><small>54.2 GB / 128 GB 已使用</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="d-group">
+            <div class="d-label">个性化</div>
+            <div class="d-card">
+              <button class="d-row" type="button" data-toast="声音设置还没有展开">
+                <span class="d-ic purple"><svg viewBox="0 0 24 24"><use href="#di-sound"/></svg></span>
+                <span class="d-txt"><b>声音和振动</b><small>铃声 · 振动</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-sub="display" data-title="显示">
+                <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-display"/></svg></span>
+                <span class="d-txt"><b>显示</b><small id="dSumDisplay">深色主题 · 自动亮度</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="d-group">
+            <div class="d-label">安全与隐私</div>
+            <div class="d-card">
+              <button class="d-row" type="button" data-toast="安全设置还没有展开">
+                <span class="d-ic green"><svg viewBox="0 0 24 24"><use href="#di-shield"/></svg></span>
+                <span class="d-txt"><b>安全</b><small>屏幕锁定 · 指纹已启用</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-toast="位置设置还没有展开">
+                <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-pin"/></svg></span>
+                <span class="d-txt"><b>位置</b><small>已开启 · 高精度</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <section class="d-group">
+            <div class="d-label">关于</div>
+            <div class="d-card">
+              <button class="d-row" type="button" data-sub="about" data-title="关于手机">
+                <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-info"/></svg></span>
+                <span class="d-txt"><b>关于手机</b><small>CintyezOS 0.1 · Cintyez One</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </div>
+          </section>
+
+          <div class="d-empty" id="droidEmpty">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#di-search"/></svg>
+            <b>没有找到相关设置</b>
+            <span>试试「网络」「显示」或「关于」</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-sub" id="droidSub" aria-hidden="true">
+        <header class="d-top">
+          <button class="d-back" id="dSubBack" type="button" aria-label="返回设置">
+            <svg viewBox="0 0 24 24"><use href="#di-back"/></svg>
+          </button>
+          <h2 id="dSubTitle">网络和互联网</h2>
+        </header>
+
+        <div class="d-scroll" id="dSubScroll">
+          <div class="d-subpage" data-sub="wifi" hidden>
+            <section class="d-card" style="margin-bottom:16px">
+              <div class="d-row d-row-static">
+                <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                <span class="d-txt"><b>Wi-Fi</b><small id="wifiState">已连接到 Cintyez-5G</small></span>
+                <button class="d-switch" id="wifiSwitch" type="button" role="switch" aria-checked="true" aria-label="Wi-Fi 开关"><span></span></button>
+              </div>
+            </section>
+
+            <div id="wifiAvailable">
+              <section class="d-card" style="margin-bottom:16px">
+                <div class="d-row d-row-static">
+                  <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                  <span class="d-txt"><b id="wifiConnectedName">Cintyez-5G</b><small>已连接 · 信号极佳 · 已加密</small></span>
+                  <svg class="d-check" viewBox="0 0 24 24"><use href="#di-check"/></svg>
+                </div>
+              </section>
+
+              <div class="d-label">可用网络</div>
+              <section class="d-card" id="wifiNetworks">
+                <button class="d-row is-connected" type="button" data-net="Cintyez-5G">
+                  <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                  <span class="d-txt"><b>Cintyez-5G</b><small>已连接 · 已加密</small></span>
+                  <svg class="d-check d-netcheck" viewBox="0 0 24 24"><use href="#di-check"/></svg>
+                </button>
+                <button class="d-row" type="button" data-net="Kemon-2.4G">
+                  <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                  <span class="d-txt"><b>Kemon-2.4G</b><small>已加密</small></span>
+                  <svg class="d-check d-netcheck" viewBox="0 0 24 24"><use href="#di-check"/></svg>
+                </button>
+                <button class="d-row" type="button" data-net="CMCC-5G">
+                  <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                  <span class="d-txt"><b>CMCC-5G</b><small>已加密</small></span>
+                  <svg class="d-check d-netcheck" viewBox="0 0 24 24"><use href="#di-check"/></svg>
+                </button>
+                <button class="d-row" type="button" data-net="602">
+                  <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-wifi"/></svg></span>
+                  <span class="d-txt"><b>602</b><small>开放网络</small></span>
+                  <svg class="d-check d-netcheck" viewBox="0 0 24 24"><use href="#di-check"/></svg>
+                </button>
+              </section>
+            </div>
+
+            <p class="d-note">网络列表是原型数据。切换网络会同步回上一页的摘要。</p>
+          </div>
+
+          <div class="d-subpage" data-sub="display" hidden>
+            <div class="d-label">外观</div>
+            <section class="d-card" style="margin-bottom:16px">
+              <div class="d-row d-row-static">
+                <span class="d-ic blue"><svg viewBox="0 0 24 24"><use href="#di-display"/></svg></span>
+                <span class="d-txt"><b>深色主题</b><small>同时切换整个 CintyezOS 外观</small></span>
+                <button class="d-switch" id="droidDarkSwitch" type="button" role="switch" aria-checked="false" aria-label="深色主题"><span></span></button>
+              </div>
+              <div class="d-row d-row-static">
+                <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-display"/></svg></span>
+                <span class="d-txt"><b>自动调节亮度</b><small>根据环境光调整屏幕</small></span>
+                <button class="d-switch" id="autoBrightSwitch" type="button" role="switch" aria-checked="true" aria-label="自动调节亮度"><span></span></button>
+              </div>
+            </section>
+
+            <div class="d-label">亮度</div>
+            <section class="d-card" style="margin-bottom:16px">
+              <div class="d-slider">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#di-display"/></svg>
+                <input type="range" id="droidBrightness" min="20" max="100" step="1" value="100" aria-label="屏幕亮度">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#di-display"/></svg>
+              </div>
+              <button class="d-row" type="button" data-toast="屏幕超时设置还没有展开">
+                <span class="d-txt"><b>屏幕超时</b><small>30 秒</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </section>
+
+            <p class="d-note">亮度会真实作用于整个屏幕；深色主题会写回 CintyezOS 的外观设置。</p>
+          </div>
+
+          <div class="d-subpage" data-sub="about" hidden>
+            <section class="d-card" style="margin-bottom:16px">
+              <div class="d-row d-row-static">
+                <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-info"/></svg></span>
+                <span class="d-txt"><b>Cintyez One</b><small>Kemon Cintyez 的设备</small></span>
+              </div>
+            </section>
+
+            <div class="d-label">设备信息</div>
+            <section class="d-card" style="margin-bottom:16px">
+              <div class="d-kv"><span>设备名称</span><b>Cintyez One</b></div>
+              <div class="d-kv"><span>型号</span><b>CTZ-01</b></div>
+              <div class="d-kv"><span>处理器</span><b>Kemon C1 · 8 核</b></div>
+              <div class="d-kv"><span>内存</span><b>12.0 GB</b></div>
+              <div class="d-kv"><span>存储</span><b>128 GB</b></div>
+              <div class="d-kv"><span>CintyezOS 版本</span><b>0.1</b></div>
+              <div class="d-kv"><span>Android 版本</span><b>16 · 风格复刻</b></div>
+            </section>
+
+            <div class="d-label">系统</div>
+            <section class="d-card">
+              <button class="d-row" type="button" data-toast="系统已是最新版本">
+                <span class="d-ic green"><svg viewBox="0 0 24 24"><use href="#di-shield"/></svg></span>
+                <span class="d-txt"><b>系统更新</b><small>已是最新版本 · 昨天检查</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+              <button class="d-row" type="button" data-toast="法律信息还没有展开">
+                <span class="d-ic gray"><svg viewBox="0 0 24 24"><use href="#di-info"/></svg></span>
+                <span class="d-txt"><b>法律信息</b><small>开源许可 · 隐私政策</small></span>
+                <svg class="d-chev" viewBox="0 0 24 24"><use href="#di-chev"/></svg>
+              </button>
+            </section>
+
+            <p class="d-note">这是 CintyezOS 里的 Android 风格彩蛋，不是真正的 Android 系统。设备信息当然也是编的。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="d-toast" id="droidToast" role="status"></div>
+  </section>
+
+  <div id="screenDim" aria-hidden="true"></div>
+  <div id="grain"></div>
+</div>
+
+<script>
+/* =========================================================
+   数据层（结构不变）
+   ========================================================= */
+const mockApps = [
+  { name:'B站',     id:'bilibili',    iconColor:'#FB7299' },
+  { name:'知乎',    id:'zhihu',       iconColor:'#0A84FF' },
+  { name:'微信',    id:'wechat',      iconColor:'#07C160' },
+  { name:'淘宝',    id:'taobao',      iconColor:'#FF6B35' },
+  { name:'京东',    id:'jd',          iconColor:'#E0245E' },
+  { name:'抖音',    id:'douyin',      iconColor:'#8E7CFF' },
+  { name:'快手',    id:'kuaishou',    iconColor:'#FFB020' },
+  { name:'小红书',  id:'xiaohongshu', iconColor:'#00C2A8' },
+  { name:'网易云',  id:'netease',     iconColor:'#B14BFF' },
+  { name:'QQ',      id:'qq',          iconColor:'#2D9CDB' },
+  { name:'微博',    id:'weibo',       iconColor:'#F2994A' },
+  { name:'豆瓣',    id:'douban',      iconColor:'#6FCF97' },
+  { name:'美团',    id:'meituan',     iconColor:'#EB5757' },
+  { name:'饿了么',  id:'eleme',       iconColor:'#BB6BD9' },
+  { name:'拼多多',  id:'pdd',         iconColor:'#56CCF2' },
+  { name:'高德',    id:'amap',        iconColor:'#F2C94C' },
+  { name:'百度',    id:'baidu',       iconColor:'#27AE60' },
+  { name:'支付宝',  id:'alipay',      iconColor:'#FF5CA8' },
+  { name:'闲鱼',    id:'xianyu',      iconColor:'#13C2C2' },
+  { name:'掘金',    id:'juejin',      iconColor:'#722ED1' },
+  { name:'GitHub',  id:'github',      iconColor:'#FF85A2' },
+  { name:'Figma',   id:'figma',       iconColor:'#52C41A' },
+  { name:'Notion',  id:'notion',      iconColor:'#2F54EB' },
+  { name:'Spotify', id:'spotify',     iconColor:'#FF9F0A' },
+  { name:'Steam',   id:'steam',       iconColor:'#30D158' },
+  { name:'Telegram',id:'telegram',    iconColor:'#0FB9B1' },
+  { name:'Discord', id:'discord',     iconColor:'#A259FF' },
+  { name:'Linear',  id:'linear',      iconColor:'#FF375F' },
+  { name:'Obsidian',id:'obsidian',    iconColor:'#4CD964' },
+  { name:'Vercel',  id:'vercel',      iconColor:'#5AC8FA' },
+  { name:'设置',    id:'settings',    iconColor:'#3DDC84' }
+];
+
+/* 单色能力符号：统一 24 栅格、1.7 线宽、圆头。品牌色只留在极淡的底色里。 */
+const ICONS = {
+  bilibili:`<rect x="3.2" y="7.2" width="17.6" height="13.1" rx="3.2"/><path d="m7.8 3.2 3.4 4M16.2 3.2l-3.4 4"/>`,
+  zhihu:`<path d="M20.4 11.9c0 4.3-3.7 7.8-8.2 7.8-1 0-1.9-.2-2.8-.5L4 21l1.4-3.8c-1.1-1.4-1.8-3.2-1.8-5.3C3.6 7.6 7.3 4 12.2 4s8.2 3.6 8.2 7.9z"/><path d="M10.1 9.5a1.9 1.9 0 1 1 2.7 1.7c-.7.3-1 .8-1 1.4"/><circle cx="11.8" cy="15.3" r=".7" fill="currentColor" stroke="none"/>`,
+  wechat:`<path d="M9.6 5.6c-3.7 0-6.6 2.4-6.6 5.3 0 1.7.9 3.2 2.4 4.2l-.7 2.2 2.5-1.2c.7.2 1.5.3 2.4.3"/><path d="M21.5 13.4c0-2.6-2.5-4.7-5.6-4.7s-5.6 2.1-5.6 4.7 2.5 4.7 5.6 4.7c.6 0 1.2-.1 1.8-.2l2.1 1.1-.6-1.9c1.4-.9 2.3-2.3 2.3-3.7z"/>`,
+  taobao:`<path d="M5.2 8.2h13.6l-1.1 12H6.3z"/><path d="M9 8.2V6.6a3 3 0 0 1 6 0v1.6"/>`,
+  jd:`<rect x="3.6" y="6.4" width="16.8" height="13.2" rx="1.8"/><path d="M3.6 10.4h16.8M12 6.4v13.2"/>`,
+  douyin:`<path d="M14.2 3.6v9.8a3.6 3.6 0 1 1-3.6-3.6"/><path d="M14.2 3.6c.5 2.6 2.3 4.4 4.8 4.7"/>`,
+  kuaishou:`<rect x="3.2" y="7.4" width="11.4" height="9.4" rx="2.6"/><path d="m14.6 11 6.1-3.4v9.1l-6.1-3.4z"/>`,
+  xiaohongshu:`<path d="M12 6.6C10 4.9 6.9 4.4 3.8 5.1v13c3.1-.7 6.2-.2 8.2 1.5 2-1.7 5.1-2.2 8.2-1.5v-13c-3.1-.7-6.2-.2-8.2 1.5z"/><path d="M12 6.6v13"/>`,
+  netease:`<circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="2.2"/><path d="M12 3.6a8.4 8.4 0 0 1 6.1 2.6"/>`,
+  qq:`<circle cx="12" cy="12" r="8.4"/><circle cx="9.2" cy="10" r=".85" fill="currentColor" stroke="none"/><circle cx="14.8" cy="10" r=".85" fill="currentColor" stroke="none"/><path d="M8.6 14.2c.9 1 2.1 1.6 3.4 1.6s2.5-.5 3.4-1.6"/>`,
+  weibo:`<path d="M2.8 12s3.5-5.4 9.2-5.4S21.2 12 21.2 12s-3.5 5.4-9.2 5.4S2.8 12 2.8 12z"/><circle cx="12" cy="12" r="2.7"/>`,
+  douban:`<path d="M12 4.2c3.2 0 5.7 3.4 5.7 7.6S15.2 19.4 12 19.4 6.3 16 6.3 11.8 8.8 4.2 12 4.2z"/><path d="M8.7 14.2c1.9 1.3 4.7 1.3 6.6 0"/>`,
+  meituan:`<path d="M4.4 9h15.2l-1.3 9.3a1.8 1.8 0 0 1-1.8 1.5H7.5a1.8 1.8 0 0 1-1.8-1.5L4.4 9z"/><path d="M8 9 9.4 3.8h5.2L16 9"/>`,
+  eleme:`<path d="M3.8 11h16.4a8.2 8.2 0 0 1-16.4 0z"/><path d="M3.8 11c0-1.1.9-2 2-2h12.4c1.1 0 2 .9 2 2M8.2 6.4c0-1 .9-1.5.9-2.6M12 6c0-1 .9-1.5.9-2.6M15.8 6.4c0-1 .9-1.5.9-2.6"/>`,
+  pdd:`<path d="M4 4h6v2.2a2.2 2.2 0 1 0 4 0V4h6v6h-2.2a2.2 2.2 0 1 0 0 4H20v6h-6v-2.2a2.2 2.2 0 1 0-4 0V20H4v-6h2.2a2.2 2.2 0 1 0 0-4H4z"/>`,
+  amap:`<path d="M12 21s6.1-5.6 6.1-10.2A6.1 6.1 0 0 0 5.9 10.8C5.9 15.4 12 21 12 21z"/><circle cx="12" cy="10.7" r="2.2"/>`,
+  baidu:`<ellipse cx="12" cy="15.2" rx="4.6" ry="3.9"/><circle cx="6.6" cy="10" r="1.7"/><circle cx="11.4" cy="7.6" r="1.7"/><circle cx="16.4" cy="9" r="1.7"/>`,
+  alipay:`<circle cx="12" cy="12" r="8.4"/><rect x="9.6" y="9.6" width="4.8" height="4.8" rx=".6"/>`,
+  xianyu:`<path d="M3.6 12s3.1-4.6 7.6-4.6c3.6 0 6.4 2.4 7.9 4.6-1.5 2.2-4.3 4.6-7.9 4.6C7 16.6 3.6 12 3.6 12z"/><path d="M3.6 12 1.8 9.2v5.6z"/><circle cx="15.3" cy="10.9" r=".7" fill="currentColor" stroke="none"/>`,
+  juejin:`<path d="m8.4 8-4.2 4 4.2 4M15.6 8l4.2 4-4.2 4M13.7 5.4 10.3 18.6"/>`,
+  github:`<circle cx="6.4" cy="6" r="2.1"/><circle cx="6.4" cy="18" r="2.1"/><circle cx="17.6" cy="8.2" r="2.1"/><path d="M6.4 8.1v7.8M17.6 10.3c0 3.2-4.2 3.1-6.5 4.1"/>`,
+  figma:`<path fill="currentColor" stroke="none" d="M12 3H9.5a2.8 2.8 0 0 0 0 5.6H12V3zm0 0h2.5a2.8 2.8 0 0 1 0 5.6H12V3zM12 8.6H9.5a2.8 2.8 0 0 0 0 5.6H12V8.6zm0 0h2.5a2.8 2.8 0 0 1 0 5.6H12V8.6zM12 14.2H9.5a2.8 2.8 0 1 0 2.5 2.8v-2.8z"/>`,
+  notion:`<path d="M5.6 4.2h7.6L18 8.8v11H5.6z"/><path d="M13.2 4.2v4.6H18M8.6 12h5.8M8.6 15.4h4"/>`,
+  spotify:`<circle cx="12" cy="12" r="8.4"/><path d="M7.2 9c3.1-.8 6.3-.4 9.1 1.1M8 12.2c2.5-.6 5-.3 7.3.9M8.8 15.2c1.8-.4 3.7-.2 5.4.7"/>`,
+  steam:`<circle cx="12" cy="12" r="3.4"/><path d="M12 3.6v2.2M12 18.2v2.2M20.4 12h-2.2M5.8 12H3.6M18 6l-1.6 1.6M7.6 16.4 6 18M18 18l-1.6-1.6M7.6 7.6 6 6"/>`,
+  telegram:`<path d="M21.4 3.6 2.8 10.4l5.6 2 1.3 5.6 3.1-3.6 4.3 3.1z"/><path d="m8.4 12.4 13-8.8"/>`,
+  discord:`<rect x="2.8" y="8" width="18.4" height="8.6" rx="4.3"/><path d="M7.4 11.2v2.6M6.1 12.5h2.6"/><circle cx="16.2" cy="11.9" r=".85" fill="currentColor" stroke="none"/><circle cx="18" cy="13.4" r=".85" fill="currentColor" stroke="none"/>`,
+  linear:`<path d="M4.2 14.6 14.6 4.2M8.1 20 20 8.1M13.2 20.2 20.2 13.2"/>`,
+  obsidian:`<path d="M12 3.4 18.8 9l-2 9.8H7.2L5.2 9z"/><path d="M5.2 9h13.6M12 3.4v15.4"/>`,
+  vercel:`<path fill="currentColor" stroke="none" d="M12 4.2 21 19.4H3z"/>`,
+  settings:`<path d="M6.4 10.4a5.6 5.6 0 0 1 11.2 0v7a1.3 1.3 0 0 1-1.3 1.3H7.7a1.3 1.3 0 0 1-1.3-1.3z"/><path d="M8.7 6.6 7.3 4.5M15.3 6.6l1.4-2.1"/><circle cx="9.9" cy="10.7" r=".75" fill="currentColor" stroke="none"/><circle cx="14.1" cy="10.7" r=".75" fill="currentColor" stroke="none"/>`,
+
+  /* 通知里出现的系统应用 */
+  mail:`<rect x="3" y="5.4" width="18" height="13.2" rx="2.4"/><path d="m4.2 7 7.8 5.9L19.8 7"/>`,
+  calendar:`<rect x="3.4" y="5.2" width="17.2" height="15" rx="2.4"/><path d="M3.4 9.6h17.2M8 3.4v3.6M16 3.4v3.6"/><circle cx="12" cy="14.8" r="1.4" fill="currentColor" stroke="none"/>`,
+  feishu:`<circle cx="12" cy="12" r="4"/><path d="M16 12v1.4a2.2 2.2 0 0 0 4.4 0V12a8.4 8.4 0 1 0-3.3 6.7"/>`,
+  imessage:`<path d="M20.5 11.8c0 4-3.8 7.2-8.5 7.2-1 0-1.9-.1-2.8-.4L4.2 21l1.4-3.5c-1.2-1.4-1.9-3.3-1.9-5.5 0-4 3.8-7.2 8.5-7.2s8.3 3.2 8.3 7z"/><circle cx="8.7" cy="11.8" r=".75" fill="currentColor" stroke="none"/><circle cx="12" cy="11.8" r=".75" fill="currentColor" stroke="none"/><circle cx="15.3" cy="11.8" r=".75" fill="currentColor" stroke="none"/>`,
+  reminders:`<circle cx="12" cy="12" r="8.2"/><path d="m8.1 12.2 2.6 2.6 5.2-5.5"/>`,
+  dingtalk:`<path d="M9.2 3.2h5.6l-1 5.8 4.2 4-4.8 2-1.2 5.8-1.2-5.8-4.8-2 4.2-4z"/>`,
+  notes:`<path d="M5 4h14v11l-5 5H5z"/><path d="M14 20v-5h5M8 9h8M8 12.5h5"/>`,
+  sspai:`<path d="M4.6 6.4h14.8M8.4 6.4v11.4M15.6 6.4v11.4M7.3 17.8h2.2M14.5 17.8h2.2"/>`,
+  dot:`<circle cx="12" cy="12" r="3"/>`
+};
+const NOTICE_ICON = {
+  '微信':'wechat','邮件':'mail','日历':'calendar','飞书':'feishu','iMessage':'imessage',
+  '提醒':'reminders','钉钉':'dingtalk','备忘录':'notes','GitHub':'github','B站':'bilibili','少数派':'sspai'
+};
+function iconSVG(id, size){
+  return `<svg class="glyph" viewBox="0 0 24 24" width="${size || 18}" height="${size || 18}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id] || ICONS.dot}</svg>`;
+}
+
+const mockNotices = [
+  { app:'微信',  color:'#07C160', time:'刚刚',  title:'林工',   text:'架构评审提前到 15:00，你能到吗？', group:'urgent' },
+  { app:'邮件',  color:'#0A84FF', time:'2 分钟', title:'财务 · 季度预算', text:'审批单待你签字，今日截止', group:'urgent' },
+  { app:'日历',  color:'#FF453A', time:'5 分钟', title:'架构评审',  text:'15:00 · 会议室 A · 5 人已确认', group:'urgent' },
+
+  { app:'微信',  color:'#07C160', time:'12 分钟', title:'妈妈',   text:'周末回家吃饭吗', group:'people' },
+  { app:'飞书',  color:'#3370FF', time:'28 分钟', title:'陈夏',   text:'文档已更新，麻烦看下第三段', group:'people' },
+  { app:'iMessage', color:'#30D158', time:'1 小时', title:'Alex', text:'那版 demo 我看过了，节奏很棒', group:'people' },
+
+  { app:'提醒',  color:'#FF9F0A', time:'6 分钟', title:'今天待办',  text:'提交 v2 交互稿 · 还有 2 项', group:'task' },
+  { app:'钉钉',  color:'#3296FA', time:'20 分钟', title:'审批中心',  text:'你有 2 条待审批', group:'task' },
+  { app:'备忘录', color:'#F2C94C', time:'40 分钟', title:'自己',    text:'记得问接口超时的重试策略', group:'task' },
+
+  { app:'GitHub', color:'#8E7CFF', time:'9 分钟', title:'kemon-os', text:'3 个 PR 等待 review', group:'feed' },
+  { app:'B站',   color:'#FB7299', time:'2 小时', title:'关注的 UP 主', text:'更新了：交互原型怎么做到 60fps', group:'feed' },
+  { app:'少数派', color:'#FF375F', time:'3 小时', title:'今日推荐',   text:'5 篇文章 · 约 24 分钟读完', group:'feed' }
+];
+
+const GROUP_META = {
+  urgent: { label:'紧急', color:'var(--flame-ca)' },
+  people: { label:'人际', color:'var(--flame-na)' },
+  task:   { label:'事务', color:'var(--flame-cu)' },
+  feed:   { label:'资讯', color:'var(--flame-k)' }
+};
+const GROUP_ORDER = ['urgent', 'people', 'task', 'feed'];
+
+const AI_RANK = [
+  '微信','支付宝','高德','美团','B站','知乎',
+  '掘金','GitHub','Notion','Figma','小红书','淘宝',
+  '京东','抖音','网易云','QQ','微博','豆瓣',
+  '快手','饿了么','拼多多','百度','闲鱼','Steam',
+  'Spotify','Telegram','Discord','Linear','Obsidian','Vercel','设置'
+];
+
+/* =========================================================
+   工具
+   ========================================================= */
+function hexToRgb(h){
+  h = String(h).replace('#','');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const n = parseInt(h, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function rgba(hex, a){ const [r,g,b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; }
+function clamp(v, a, b){ return v < a ? a : (v > b ? b : v); }
+function $(id){ return document.getElementById(id); }
+
+function bezier(x1, y1, x2, y2){
+  const cx = 3*x1, bx = 3*(x2-x1)-cx, ax = 1-cx-bx;
+  const cy = 3*y1, by = 3*(y2-y1)-cy, ay = 1-cy-by;
+  const sx = t => ((ax*t+bx)*t+cx)*t;
+  const sy = t => ((ay*t+by)*t+cy)*t;
+  const dx = t => (3*ax*t+2*bx)*t+cx;
+  return function(x){
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 6; i++){
+      const err = sx(t) - x;
+      if (Math.abs(err) < 1e-4) break;
+      const d = dx(t);
+      if (Math.abs(d) < 1e-6) break;
+      t -= err / d;
+    }
+    return sy(t);
+  };
+}
+
+const RMQ = window.matchMedia('(prefers-reduced-motion: reduce)');
+function rm(){ return RMQ.matches; }
+
+const EASE_SPRING = 'cubic-bezier(.22,1.06,.36,1)';
+const EASE_OUT    = 'cubic-bezier(.25,.8,.3,1)';
+
+/* =========================================================
+   DOM
+   ========================================================= */
+const lockEl      = $('lock');
+const lockInner   = $('lockInner');
+const blankCatcher= $('blankCatcher');
+const notifArea   = $('notifArea');
+const notifScroll = $('notifScroll');
+const scrollPad   = $('scrollPad');
+const expandHead  = $('expandHead');
+const ehDot       = $('ehDot');
+const ehName      = $('ehName');
+const ehCount     = $('ehCount');
+const swipeHint   = $('swipeHint');
+const bootFx      = $('bootFx');
+const bctx        = bootFx.getContext('2d');
+const homeEl      = $('home');
+const promptLine  = $('promptLine');
+const promptSub   = $('promptSub');
+const inputDock   = $('inputDock');
+const cmd         = $('cmd');
+const agentChips  = $('agentChips');
+const orbEl       = $('orb');
+const matrixEl    = $('matrix');
+const mScene      = $('mScene');
+const mViewport   = $('mViewport');
+const mSub        = $('mSub');
+const appMenu     = $('appMenu');
+const amName      = $('amName');
+const amDot       = $('amDot');
+const menuScrim   = $('menuScrim');
+const launchEl    = $('launch');
+const launchIcon  = $('launchIcon');
+const launchName  = $('launchName');
+const setBtn      = $('setBtn');
+const homeKemon   = $('homeKemon');
+const edgeZone    = $('edgeZone');
+const settingsEl  = $('settings');
+const setScrim    = $('setScrim');
+const setGrab     = $('setGrab');
+const setClose    = $('setClose');
+const setBadge    = $('setBadge');
+const cfgBase     = $('cfgBase');
+const cfgModel    = $('cfgModel');
+const cfgKey      = $('cfgKey');
+const cfgTemp     = $('cfgTemp');
+const cfgTempVal  = $('cfgTempVal');
+const cfgTest     = $('cfgTest');
+const cfgHint     = $('cfgHint');
+const themeSeg    = $('themeSeg');
+const qWifi       = $('qWifi');
+const qBt         = $('qBt');
+const qDnd        = $('qDnd');
+const qDark       = $('qDark');
+const qWifiSub    = $('qWifiSub');
+const qBtSub      = $('qBtSub');
+const qDndSub     = $('qDndSub');
+const qDarkSub    = $('qDarkSub');
+const moreSetBtn  = $('moreSetBtn');
+const leftEdgeZone= $('leftEdgeZone');
+const agScrim     = $('agScrim');
+const agEl        = $('agent');
+const agList      = $('agList');
+const agChat      = $('agChat');
+const agGrab      = $('agGrab');
+const agClose     = $('agClose');
+const agNew       = $('agNew');
+const agSearch    = $('agSearch');
+const agWs        = $('agWs');
+const agSessions  = $('agSessions');
+const agEmpty     = $('agEmpty');
+const agEmptyNew  = $('agEmptyNew');
+const agAccount   = $('agAccount');
+const agState     = $('agState');
+const agThread    = $('agThread');
+const agForm      = $('agForm');
+const agInput     = $('agInput');
+const agSend      = $('agSend');
+const agBack      = $('agBack');
+const agChatMore  = $('agChatMore');
+const agChatTitle = $('agChatTitle');
+const agChatMeta  = $('agChatMeta');
+const agToast     = $('agToast');
+
+/* =========================================================
+   状态
+   ========================================================= */
+const S = {
+  screen: 'lock',      // lock | boot | home | matrix
+  mode: 'flat',        // flat | grouped | expanded | detail
+  group: null,
+  detailIdx: -1,
+  detailFrom: 'grouped',
+  typed: false,
+  agentObjects: [],
+  theme: document.documentElement.dataset.theme,
+  hoverIdx: -1,
+  settingsOpen: false,
+  agOpen: false
+};
+
+/* =========================================================
+   时钟
+   ========================================================= */
+const WEEK = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+function tickClock(){
+  const d = new Date();
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const dstr = (d.getMonth() + 1) + '月' + d.getDate() + '日 ' + WEEK[d.getDay()];
+  $('bigTime').textContent = hh + ':' + mm;
+  $('bigDate').textContent = dstr;
+  $('statusDate').textContent = dstr;
+}
+tickClock();
+setInterval(tickClock, 10000);
+
+/* =========================================================
+   锁屏通知
+   ========================================================= */
+const noticeNodes = [];
+
+function buildNotices(){
+  GROUP_ORDER.forEach(g => {
+    const lab = document.createElement('div');
+    lab.className = 'g-label';
+    lab.dataset.g = g;
+    lab.style.color = GROUP_META[g].color;
+    const n = mockNotices.filter(x => x.group === g).length;
+    lab.innerHTML = `<span class="g-dot"></span>${GROUP_META[g].label}<b>${n}</b>`;
+    notifScroll.appendChild(lab);
+    GROUP_META[g].el = lab;
+    GROUP_META[g].count = n;
+    GROUP_META[g].y = 0;
+    bindLabel(g);
+  });
+
+  mockNotices.forEach((d, i) => {
+    const el = document.createElement('div');
+    el.className = 'notice';
+    el.innerHTML = `
+      <div class="n-icon" style="--tint:${d.color}">${iconSVG(NOTICE_ICON[d.app], 18)}</div>
+      <div class="n-body">
+        <div class="n-head"><span>${d.app}</span><span>${d.time}</span></div>
+        <div class="n-title">${d.title}</div>
+        <div class="n-sum">${d.text}</div>
+        <div class="n-text-wrap"><div class="n-text">${d.text}</div></div>
+      </div>`;
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(30px) scale(.975)';
+    notifScroll.appendChild(el);
+    noticeNodes.push({ el, data: d, y: 0, s: 1 });
+    bindNotice(i);
+  });
+}
+
+/* 稳定基准卡片高度：detail 卡会变高，行距必须用固定基准 */
+let BASE_CARD_H = 72;
+function cardH(){
+  return BASE_CARD_H;
+}
+
+function card(n, y, scale, opacity, dur, delay, ease){
+  const el = n.el;
+  el.style.transitionDuration = (rm() ? 0 : dur) + 'ms';
+  el.style.transitionDelay = (rm() ? 0 : delay) + 'ms';
+  el.style.transitionTimingFunction = ease;
+  el.style.transform = `translateY(${y.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+  el.style.opacity = opacity.toFixed(3);
+  n.y = y; n.s = scale;
+}
+
+function label(g, y, opacity, dur, delay, hit){
+  const el = GROUP_META[g].el;
+  GROUP_META[g].y = y;
+  el.style.transitionDuration = (rm() ? 0 : dur) + 'ms';
+  el.style.transitionDelay = (rm() ? 0 : delay) + 'ms';
+  el.style.transform = `translateY(${y}px)`;
+  el.style.opacity = String(opacity);
+  el.classList.toggle('hit', !!hit);
+}
+
+function groupedPlan(){
+  const H = cardH();
+  const cards = new Map();
+  const labels = {};
+  let y = 0;
+  GROUP_ORDER.forEach((g, gi) => {
+    labels[g] = y;
+    y += 18;
+    noticeNodes.filter(n => n.data.group === g).forEach((n, k) => {
+      const d = Math.min(k, 3);
+      cards.set(n, {
+        y: y + d * 5,
+        scale: 1 - d * 0.028,
+        opacity: k > 3 ? 0 : 1 - d * 0.16,
+        z: 120 - d,
+        delay: (gi * 4 + k) * 22
+      });
+    });
+    y += H + 15 + 8;
+  });
+  return { cards, labels, total: y };
+}
+
+function setLockMode(m){
+  S.mode = m;
+  lockInner.classList.toggle('mod-exp', m === 'expanded' || m === 'detail');
+}
+
+/* --- flat --- */
+function toFlat(){
+  const H = cardH();
+  let y = 0;
+  noticeNodes.forEach((n, i) => {
+    n.el.style.zIndex = String(200 - i);
+    n.el.style.pointerEvents = '';
+    n.el.classList.remove('is-detail');
+    card(n, y, 1, 1, 780, i * 16, EASE_SPRING);
+    y += H + 10;
+  });
+  GROUP_ORDER.forEach(g => label(g, GROUP_META[g].y, 0, 320, 0, false));
+  headOff();
+  /* flat 也要能滚：一屏放不下时纵向滚动（不改变布局归属，只撑内容高度） */
+  scrollPad.style.height = (y + 24) + 'px';
+  notifArea.classList.add('scrolling');
+  notifScroll.scrollTop = 0;
+  setLockMode('flat');
+  S.group = null; S.detailIdx = -1;
+  swipeHint.textContent = '点气泡看全文 · 上滑开机 · 底部左滑整理';
+}
+
+/* --- grouped --- */
+function toGrouped(fromGroup, keepScroll){
+  const plan = groupedPlan();
+  const active = fromGroup ? noticeNodes.filter(n => n.data.group === fromGroup) : [];
+  const activeIdx = new Map(active.map((n, i) => [n, i]));
+
+  noticeNodes.forEach(n => {
+    const p = plan.cards.get(n);
+    n.el.style.zIndex = String(p.z);
+    /* 完全透明的第 4 张不参与命中，避免隐形卡片挡住同组的可见卡片 */
+    n.el.style.pointerEvents = p.opacity <= 0.001 ? 'none' : '';
+    n.el.classList.remove('is-detail');
+    let dur = 780, delay = p.delay;
+    if (fromGroup && n.data.group === fromGroup){
+      dur = 300;
+      delay = (active.length - 1 - activeIdx.get(n)) * 25;
+    } else if (fromGroup){
+      dur = 260; delay = 0;
+    }
+    card(n, p.y, p.scale, p.opacity, dur, delay, EASE_SPRING);
+  });
+
+  GROUP_ORDER.forEach((g, gi) => label(g, plan.labels[g], 1, 600, gi * 40, true));
+  headOff();
+  /* 分组后同样要能滚：小屏上四组装不下 */
+  scrollPad.style.height = (plan.total + 24) + 'px';
+  notifArea.classList.add('scrolling');
+  if (!keepScroll) notifScroll.scrollTop = 0;
+  setLockMode('grouped');
+  S.group = null; S.detailIdx = -1;
+  swipeHint.textContent = '点气泡看整组 · 点组名看整组 · 右滑还原';
+}
+
+/* --- expanded --- */
+function toExpanded(g){
+  if (!GROUP_META[g]) return;
+  const plan = groupedPlan();
+  const H = cardH();
+
+  noticeNodes.forEach(n => {
+    if (n.data.group === g) return;
+    const p = plan.cards.get(n);
+    n.el.style.zIndex = String(p.z);
+    n.el.style.pointerEvents = 'none';
+    card(n, p.y, p.scale * 0.92, 0.12, 300, 0, EASE_OUT);
+  });
+
+  const active = noticeNodes.filter(n => n.data.group === g);
+  let yy = 38;
+  active.forEach((n, i) => {
+    n.el.style.zIndex = String(150 - i);
+    n.el.style.pointerEvents = 'auto';
+    card(n, yy, 1, 1, 420, i * 40, EASE_SPRING);
+    yy += H + 10;
+  });
+
+  GROUP_ORDER.forEach((og, i) => label(og, plan.labels[og], 0, 240, i * 20, false));
+
+  scrollPad.style.height = (yy + 30) + 'px';
+  notifArea.classList.add('scrolling');
+  notifScroll.scrollTop = 0;
+
+  const meta = GROUP_META[g];
+  ehDot.style.background = meta.color;
+  ehName.textContent = meta.label;
+  ehCount.textContent = meta.count + ' 条';
+  expandHead.classList.add('on');
+
+  setLockMode('expanded');
+  S.group = g; S.detailIdx = -1;
+  swipeHint.textContent = '点气泡看全文 · 点空白返回';
+}
+
+/* --- detail（单条全文） --- */
+function toDetail(idx, fromMode){
+  if (idx < 0 || idx >= noticeNodes.length) return;
+  const H = cardH();
+  const areaH = notifArea.clientHeight || 400;
+  /* 加上当前已滚动量 → 卡片从"它此刻所在的位置"长开，不会因为 scrollTop 归零而跳位 */
+  const detailY = Math.round(notifScroll.scrollTop + areaH * 0.18);
+
+  const d = noticeNodes[idx];
+  d.el.classList.add('is-detail');
+  d.el.style.zIndex = '280';
+  d.el.style.pointerEvents = 'auto';
+
+  noticeNodes.forEach((n, i) => {
+    if (i === idx) return;
+    n.el.style.pointerEvents = 'none';
+    card(n, detailY + 150 + i * (H + 10), 0.96, 0.12, 300, 0, EASE_OUT);
+  });
+
+  card(d, detailY, 1, 1, 340, 0, EASE_SPRING);
+
+  scrollPad.style.height = (detailY + 150 + noticeNodes.length * (H + 10) + 30) + 'px';
+  notifArea.classList.add('scrolling');
+  expandHead.classList.remove('on');
+
+  setLockMode('detail');
+  S.detailIdx = idx;
+  S.detailFrom = fromMode === 'flat' ? 'flat' : 'expanded';
+  swipeHint.textContent = '点空白返回';
+
+  setTimeout(() => relayoutDetail(idx, detailY), 330);
+}
+
+function relayoutDetail(idx, detailY){
+  if (S.mode !== 'detail' || S.detailIdx !== idx) return;
+  /* 用稳定基准高度：detail 卡自身高度会变，不能拿它当行距 */
+  const H = BASE_CARD_H;
+  const h = noticeNodes[idx].el.offsetHeight || 132;
+  let yy = detailY + h + 16;
+  noticeNodes.forEach((n, i) => {
+    if (i === idx) return;
+    card(n, yy, 0.96, 0.12, 200, 0, EASE_OUT);
+    yy += H + 10;
+  });
+  scrollPad.style.height = (yy + 30) + 'px';
+}
+
+function closeDetail(){
+  if (S.mode !== 'detail') return;
+  const idx = S.detailIdx;
+  const from = S.detailFrom;
+  noticeNodes[idx].el.classList.remove('is-detail');
+  noticeNodes[idx].el.style.pointerEvents = '';
+  if (from === 'flat') toFlat();      // 从非整理态进来的，原地退回非整理态
+  else toExpanded(S.group);
+}
+
+function headOff(){ expandHead.classList.remove('on'); }
+
+/* =========================================================
+   组标题 / 气泡 / 空白 交互
+   ========================================================= */
+let press = null;
+
+function bindLabel(g){
+  const el = GROUP_META[g].el;
+  el.addEventListener('pointerdown', (e) => {
+    if (S.mode !== 'grouped' || S.screen !== 'lock') return;
+    e.stopPropagation();
+    const plan = groupedPlan();
+    press = { g, x: e.clientX, y: e.clientY, plan };
+    try { el.setPointerCapture(e.pointerId); } catch (_) {}
+    noticeNodes.filter(n => n.data.group === g).forEach(n => {
+      const p = plan.cards.get(n);
+      card(n, p.y, p.scale * 0.97, p.opacity, 120, 0, EASE_OUT);
+    });
+    el.style.transitionDuration = '120ms';
+    el.style.transitionDelay = '0ms';
+    el.style.transform = `translateY(${GROUP_META[g].y}px) scale(.97)`;
+  });
+
+  el.addEventListener('pointerup', (e) => {
+    if (!press) return;
+    const moved = Math.hypot(e.clientX - press.x, e.clientY - press.y);
+    const g2 = press.g;
+    press = null;
+    if (moved < 12) toExpanded(g2);
+    else toGrouped(null, true);
+  });
+
+  el.addEventListener('pointercancel', () => {
+    if (!press) return;
+    press = null;
+    toGrouped(null, true);
+  });
+}
+
+/* 气泡：整框可点（flat / grouped / expanded / detail 四态都响应） */
+const TAP_SLOP = 12;      // 触屏手指必然微抖，8px 太紧会大量丢点
+const TAP_MS   = 600;
+let noticePress = null;
+
+/* 松开按压反馈：只还原 transform，不重排布局（滚动时不能把列表跳回原位） */
+function unpress(n){
+  n.el.style.transitionDuration = '150ms';
+  n.el.style.transitionDelay = '0ms';
+  n.el.style.transitionTimingFunction = EASE_OUT;
+  n.el.style.transform = `translateY(${n.y.toFixed(1)}px) scale(${n.s.toFixed(3)})`;
+}
+
+function bindNotice(i){
+  const n = noticeNodes[i];
+  n.el.addEventListener('pointerdown', (e) => {
+    if (S.screen !== 'lock') return;
+    noticePress = { i, x: e.clientX, y: e.clientY, t: performance.now() };
+    if (S.mode !== 'detail'){
+      const p = S.mode === 'grouped' ? groupedPlan().cards.get(n) : null;
+      const y = p ? p.y : n.y;
+      const s = p ? p.scale : n.s;
+      n.el.style.transitionDuration = '150ms';
+      n.el.style.transitionDelay = '0ms';
+      n.el.style.transform = `translateY(${y}px) scale(${s * 0.97})`;
+    }
+  });
+
+  n.el.addEventListener('pointerup', (e) => {
+    if (!noticePress || noticePress.i !== i) return;
+    const moved = Math.hypot(e.clientX - noticePress.x, e.clientY - noticePress.y);
+    const dt = performance.now() - noticePress.t;
+    noticePress = null;
+    if (moved > TAP_SLOP || dt > TAP_MS){ unpress(n); return; }
+
+    if (S.mode === 'flat'){
+      /* 非整理态点气泡 -> 直接看全文 */
+      toDetail(i, 'flat');
+    } else if (S.mode === 'grouped'){
+      /* 分组态点气泡 -> 展开该组完整列表 */
+      toExpanded(n.data.group);
+    } else if (S.mode === 'expanded'){
+      /* 展开态点某条 -> 只展开这一条的全文 */
+      toDetail(i, 'expanded');
+    } else if (S.mode === 'detail'){
+      /* 详情态再点自身 -> 收回 */
+      if (S.detailIdx === i) closeDetail();
+    }
+  });
+
+  n.el.addEventListener('pointercancel', () => {
+    if (!noticePress || noticePress.i !== i) return;
+    noticePress = null;
+    /* 手指被浏览器接管成滚动 → 只去掉按压视觉，绝不重排 */
+    unpress(n);
+  });
+}
+
+/* 空白捕获：点任意空白退回 */
+let blankPress = null;
+
+blankCatcher.addEventListener('pointerdown', (e) => {
+  blankPress = { x: e.clientX, y: e.clientY, t: performance.now() };
+});
+
+blankCatcher.addEventListener('pointerup', (e) => {
+  if (!blankPress) return;
+  const moved = Math.hypot(e.clientX - blankPress.x, e.clientY - blankPress.y);
+  const dt = performance.now() - blankPress.t;
+  blankPress = null;
+  if (moved > 12 || dt > 500) return;
+  if (S.mode === 'detail') closeDetail();
+  else if (S.mode === 'expanded') toGrouped(S.group);
+});
+
+blankCatcher.addEventListener('pointercancel', () => { blankPress = null; });
+
+expandHead.addEventListener('click', () => {
+  if (S.mode === 'expanded') toGrouped(S.group);
+});
+
+/* =========================================================
+   锁屏手势
+   ========================================================= */
+/* 用 Touch Events 而不是 Pointer Events：
+   手机上纵向拖动会立刻被浏览器判定为滚动并对 pointer 序列发 pointercancel，
+   上滑解锁根本收不到完整的 pointermove/pointerup。touch 序列在滚动中会继续派发。
+   鼠标/触控笔没有 touch 事件，另用 pointer 兜底（否则桌面演示不能滑）。 */
+const LOCK_SLOP = 8;        // 判定滑动方向的死区
+const UNLOCK_DIST = 60;     // 解锁位移阈值
+const BACK_DIST = 56;       // 横滑切态的位移阈值
+let tg = null;              // 锁屏手势状态
+let lastTouchTs = 0;        // 触摸后短时间内忽略同一次操作产生的 pointer 事件
+
+function resetLockStyles(){
+  lockInner.style.transitionDuration = '';
+  lockInner.style.transform = '';
+  lockInner.style.opacity = '';
+  lockInner.style.filter = '';
+  notifArea.style.transitionDuration = '';
+  notifArea.style.transform = '';
+}
+
+function gestureStart(x, y, target){
+  if (S.screen !== 'lock') return;
+  const inList = !!(target && target.closest && target.closest('#notifScroll'));
+  const max = Math.max(0, notifScroll.scrollHeight - notifScroll.clientHeight);
+  tg = {
+    x, y, dx: 0, dy: 0,
+    /* 起点在可滚列表里且不在底部 → 纵向交给原生滚动 */
+    inScroll: inList && max > 2 && notifScroll.scrollTop < max - 2,
+    axis: null,
+    scrolled: false
+  };
+  lockInner.style.transitionDuration = '0ms';
+  notifArea.style.transitionDuration = '0ms';
+}
+
+function gestureMove(dx, dy, prevent){
+  if (!tg) return;
+  tg.dx = dx; tg.dy = dy;
+
+  if (!tg.axis){
+    if (Math.abs(dx) < LOCK_SLOP && Math.abs(dy) < LOCK_SLOP) return;
+    tg.axis = Math.abs(dx) > Math.abs(dy) * 1.15 ? 'x' : 'y';
+  }
+
+  /* ---- 横滑：接管手势，阻止浏览器滚动/后退 ---- */
+  if (tg.axis === 'x'){
+    prevent();
+    if (S.mode === 'detail') return;
+    if (S.mode === 'grouped' || S.mode === 'expanded'){
+      notifArea.style.transform = dx > 0 ? `translateX(${Math.min(dx * 0.22, 40)}px)` : '';
+    } else if (dx < 0){
+      notifArea.style.transform = `translateX(${dx * 0.16}px)`;
+    }
+    return;
+  }
+
+  /* ---- 纵滑：列表还能滚就完全交给原生滚动 ---- */
+  if (tg.inScroll){ tg.scrolled = true; return; }
+  if (S.mode !== 'flat' && S.mode !== 'grouped') return;
+  if (dy >= 0) return;
+
+  prevent();
+  const p = clamp(-dy / 320, 0, 1);
+  lockInner.style.transform = `translateY(${dy * 0.55}px) scale(${1 - p * 0.07})`;
+  lockInner.style.opacity = String(1 - p * 0.55);
+  lockInner.style.filter = `blur(${p * 3}px)`;
+}
+
+function gestureEnd(){
+  if (!tg) return;
+  const { dx, dy, axis, scrolled } = tg;
+  tg = null;
+  resetLockStyles();
+
+  if (axis === 'x'){
+    if (Math.abs(dx) <= BACK_DIST || Math.abs(dx) <= Math.abs(dy) * 1.2) return;
+    if (dx > 0){
+      if (S.mode === 'expanded') toGrouped(S.group);
+      else if (S.mode === 'grouped') toFlat();
+      /* detail 态不响应横向退出 */
+    } else if (S.mode === 'flat'){
+      toGrouped();
+    }
+    return;
+  }
+
+  /* 起点在列表里、这一下手势是在翻消息 → 不算解锁 */
+  if (scrolled) return;
+  if (axis === 'y' && dy < -UNLOCK_DIST && Math.abs(dy) > Math.abs(dx) * 1.2){
+    if (S.mode === 'flat' || S.mode === 'grouped') bootUp();
+  }
+}
+
+lockEl.addEventListener('touchstart', (e) => {
+  lastTouchTs = performance.now();
+  if (e.touches.length !== 1){ tg = null; return; }
+  const t = e.touches[0];
+  gestureStart(t.clientX, t.clientY, t.target);
+}, { passive: false });
+
+lockEl.addEventListener('touchmove', (e) => {
+  lastTouchTs = performance.now();
+  if (!tg) return;
+  if (e.touches.length !== 1){ tg = null; return; }
+  const t = e.touches[0];
+  gestureMove(t.clientX - tg.x, t.clientY - tg.y, () => {
+    if (e.cancelable) e.preventDefault();
+  });
+}, { passive: false });
+
+lockEl.addEventListener('touchend', () => {
+  lastTouchTs = performance.now();
+  gestureEnd();
+}, { passive: true });
+
+lockEl.addEventListener('touchcancel', () => {
+  lastTouchTs = performance.now();
+  tg = null;
+  resetLockStyles();
+}, { passive: true });
+
+/* ---- 鼠标 / 触控笔回退（同一次触摸结束后 800ms 内忽略 pointer，避免双触发） ---- */
+function fromTouch(){ return performance.now() - lastTouchTs < 800; }
+
+lockEl.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch' || fromTouch()) return;
+  gestureStart(e.clientX, e.clientY, e.target);
+});
+
+lockEl.addEventListener('pointermove', (e) => {
+  if (!tg || e.pointerType === 'touch' || fromTouch()) return;
+  gestureMove(e.clientX - tg.x, e.clientY - tg.y, () => e.preventDefault());
+});
+
+lockEl.addEventListener('pointerup', (e) => {
+  if (e.pointerType === 'touch' || fromTouch()) return;
+  gestureEnd();
+});
+
+lockEl.addEventListener('pointercancel', (e) => {
+  if (e.pointerType === 'touch' || fromTouch()) return;
+  tg = null;
+  resetLockStyles();
+});
+
+/* =========================================================
+   开机：物理波场（只向外荡漾，无回放）
+   ========================================================= */
+const BOOT_DUR = 1300;
+const WAVE_LONG = 200;         // 网格长边格数（原 110）
+const WAVE_MARGIN_X = 50;      // 左右额外格数（把吸收边界推到屏幕外）
+const WAVE_MARGIN_TOP = 12;    // 上方额外格数
+const WAVE_MARGIN_BOT = 24;    // 下方额外格数
+const WAVE_SUBSTEPS = 4;       // 每帧子步
+const WAVE_KX = 0.42;          // 水平系数
+const WAVE_KY = 0.30;          // 垂直系数（Kx+Ky < 1 稳定）
+const WAVE_DAMP_SIM = 0.996;   // 正向阶段每帧阻尼
+const WAVE_DAMP_DECAY = 0.988; // 衰减阶段每帧阻尼（衰得更快）
+const WAVE_SIGMA = 1.35;       // 注入高斯 σ（格）
+const WAVE_AMP = 0.85;         // 主脉冲幅值
+const WAVE_AMP2 = 0.30;        // 二次弱脉冲幅值
+const WAVE_T1 = 0.13;          // 主脉冲时刻
+const WAVE_T2 = 0.35;          // 二次弱脉冲时刻
+const WAVE_T_SIM = 0.68;       // 停止注入
+const WAVE_T_FLASH = 0.86;     // 闪光开始
+const WAVE_RAYS = 160;         // 环向采样数
+const WAVE_SLOTS = 2;          // 最多同时可见 2 圈波峰
+const CREST_SEEK = 50;         // 波前搜索上限（格）
+const TAU = Math.PI * 2;
+
+let gw = 0, gh = 0, cellPx = 8, gridW = 0, gridH = 0;
+let hCur = null, hPrev = null, hNext = null, hSponge = null;
+let waveFrame = 0;
+let bootStart = 0;
+let bootRaf = 0;
+let bootSrc = { cx: 0, cy: 0 };
+let waveSrcX = 0, waveSrcY = 0;
+let pulseDone = [false, false];
+let slotR = null, slotA = null, slotH = null, slotPrev = null, slotRef = null;
+let slotAmpLast = null;
+
+function sizeBootFx(){
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  bootFx.width = innerWidth * dpr;
+  bootFx.height = innerHeight * dpr;
+  bootFx.style.width = innerWidth + 'px';
+  bootFx.style.height = innerHeight + 'px';
+  bctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function setupWave(){
+  const W = innerWidth, H = innerHeight;
+  cellPx = Math.max(W, H) / WAVE_LONG;
+  gridW = Math.ceil(W / cellPx);
+  gridH = Math.ceil(H / cellPx);
+  gw = gridW + WAVE_MARGIN_X * 2;
+  gh = gridH + WAVE_MARGIN_TOP + WAVE_MARGIN_BOT;
+  const n = gw * gh;
+
+  hCur = new Float32Array(n);
+  hPrev = new Float32Array(n);
+  hNext = new Float32Array(n);
+  hSponge = new Float32Array(n);
+  for (let j = 0; j < gh; j++){
+    for (let i = 0; i < gw; i++){
+      /* 吸收层：越靠近边界衰减越强 → 边界处不留回声 */
+      const d = Math.min(i, j, gw - 1 - i, gh - 1 - j);
+      hSponge[j * gw + i] = Math.min(1, 0.3 + 0.7 * Math.min(1, d / 9));
+    }
+  }
+
+  slotR = []; slotA = []; slotH = []; slotPrev = []; slotRef = []; slotAmpLast = [];
+  for (let s = 0; s < WAVE_SLOTS; s++){
+    slotR.push(new Float32Array(WAVE_RAYS));
+    slotA.push(new Float32Array(WAVE_RAYS));
+    slotH.push(new Uint8Array(WAVE_RAYS));
+    slotPrev.push(new Float32Array(WAVE_RAYS).fill(-1));
+    slotAmpLast.push(new Float32Array(WAVE_RAYS));
+    slotRef.push(0);
+  }
+  waveFrame = 0;
+  pulseDone = [false, false];
+}
+
+function measureOrb(){
+  const r = orbEl.getBoundingClientRect();
+  if (r.width > 0 && r.height > 0){
+    bootSrc = { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+  } else {
+    bootSrc = { cx: innerWidth / 2, cy: innerHeight - 150 };
+  }
+  waveSrcX = WAVE_MARGIN_X + bootSrc.cx / cellPx;
+  waveSrcY = WAVE_MARGIN_TOP + bootSrc.cy / cellPx;
+}
+
+/* 波源：高斯位移脉冲（同时写入 hCur / hPrev = 纯位移，不注入速度） */
+function inject(amp){
+  const R = Math.ceil(WAVE_SIGMA * 2.6);
+  const x0 = Math.round(waveSrcX), y0 = Math.round(waveSrcY);
+  for (let j = y0 - R; j <= y0 + R; j++){
+    if (j < 1 || j >= gh - 1) continue;
+    for (let i = x0 - R; i <= x0 + R; i++){
+      if (i < 1 || i >= gw - 1) continue;
+      const dx = (i - waveSrcX) / WAVE_SIGMA;
+      const dy = (j - waveSrcY) / WAVE_SIGMA;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > 6.76) continue;
+      const v = amp * Math.exp(-d2 * 0.9);
+      hCur[j * gw + i] += v;
+      hPrev[j * gw + i] += v;
+    }
+  }
+}
+
+/* leapfrog：u_next = 2u - u_prev + Kx·Δx + Ky·Δy（Kx+Ky < 1 稳定） */
+function stepWave(){
+  for (let j = 1; j < gh - 1; j++){
+    const row = j * gw;
+    for (let i = 1; i < gw - 1; i++){
+      const k = row + i;
+      const u = hCur[k];
+      const lap = WAVE_KX * (hCur[k - 1] + hCur[k + 1] - 2 * u)
+                + WAVE_KY * (hCur[k - gw] + hCur[k + gw] - 2 * u);
+      hNext[k] = (2 * u - hPrev[k] + lap) * hSponge[k];
+    }
+  }
+  for (let i = 0; i < gw; i++){
+    hNext[i] = 0;
+    hNext[(gh - 1) * gw + i] = 0;
+  }
+  for (let j = 0; j < gh; j++){
+    hNext[j * gw] = 0;
+    hNext[j * gw + gw - 1] = 0;
+  }
+  const t = hPrev; hPrev = hCur; hCur = hNext; hNext = t;
+}
+
+/* 阻尼：缩放整个状态 */
+function dampWave(d){
+  for (let k = 0; k < hCur.length; k++){
+    hCur[k] *= d;
+    hPrev[k] *= d;
+  }
+}
+
+/* 高度场双线性采样（网格坐标） */
+function sampleField(x, y){
+  if (x < 0 || y < 0 || x > gw - 1.001 || y > gh - 1.001) return 0;
+  const x0 = x | 0, y0 = y | 0;
+  const fx = x - x0, fy = y - y0;
+  const i = y0 * gw + x0;
+  const a = hCur[i] + (hCur[i + 1] - hCur[i]) * fx;
+  const b = hCur[i + gw] + (hCur[i + gw + 1] - hCur[i + gw]) * fx;
+  return a + (b - a) * fy;
+}
+
+/* 在某方向上找波峰（只取正极大 → 波谷不参与，平坦区完全透明）
+   mode = 0：取最外侧的峰（主波前）
+   mode = 1：取最内侧的峰（次级脉冲）
+   半径受 prev 严格约束 → 只允许向外推进，杜绝反向波 */
+function crestAlong(dx, dy, prev, mode){
+  const lo = prev > 0 ? prev : 1;
+  const hi = Math.min(prev > 0 ? prev + CREST_SEEK : CREST_SEEK, Math.hypot(gw, gh) - 4);
+  if (hi <= lo) return { r: -1, a: 0 };
+
+  let best = -1, bestA = 0;
+  let pc = sampleField(waveSrcX + dx * (lo - 0.5), waveSrcY + dy * (lo - 0.5));
+  let pv = pc;
+  for (let s = lo; s <= hi; s += 0.5){
+    const v = sampleField(waveSrcX + dx * s, waveSrcY + dy * s);
+    if (v > pv && v >= pc && v > 0){
+      const den = pc - 2 * pv + v;
+      const off = den !== 0 ? clamp(0.5 * (pc - v) / den, -0.5, 0.5) : 0;
+      const r = s + off;
+      const a = pv + 0.25 * (v - pc) * off;
+      if (mode === 0){
+        if (a > bestA){ bestA = a; best = r; }         // 最外侧
+      } else {
+        if (best < 0 || a > bestA * 0.55){ bestA = a; best = r; }  // 最内侧
+      }
+    }
+    pc = pv; pv = v;
+  }
+  return { r: best, a: bestA };
+}
+
+/* 逐槽提取波前：时间连续性跟踪 → 每条射线的波前半径只增不减
+   射线暂时丢失时沿用上一帧的半径（环保持形状，只是自然淡出） */
+function extractRings(){
+  for (let s = 0; s < WAVE_SLOTS; s++){
+    const R = slotR[s], A = slotA[s], H = slotH[s], P = slotPrev[s];
+    if (!pulseDone[s]){ H.fill(0); continue; }
+
+    let gmax = 0;
+    for (let k = 0; k < WAVE_RAYS; k++){
+      const th = (k / WAVE_RAYS) * TAU;
+      const dx = Math.cos(th), dy = Math.sin(th);
+      const c = crestAlong(dx, dy, P[k], s);
+      if (c.r > 0){
+        R[k] = c.r; A[k] = c.a; H[k] = 1;
+        P[k] = c.r;
+        if (c.a > gmax) gmax = c.a;
+      } else if (P[k] > 0){
+        /* 本帧没找到峰：保留上一帧位置，强度按阻尼自然衰减 */
+        R[k] = P[k]; A[k] = slotAmpLast[s][k] * 0.985; H[k] = 1;
+      }
+    }
+    slotAmpLast[s].set(A);
+    /* 参考幅度：首帧锁定后缓慢跟随，幅度衰减会体现为亮度下降 */
+    if (slotRef[s] === 0) slotRef[s] = gmax;
+    else slotRef[s] = Math.max(gmax, slotRef[s] * 0.998);
+  }
+}
+
+/* 补齐缺失射线 + 环形平滑 → 连续光滑的波环 */
+function smoothRing(R, H){
+  let any = 0;
+  for (let k = 0; k < WAVE_RAYS; k++) if (H[k]) any++;
+  if (!any) return false;
+
+  for (let k = 0; k < WAVE_RAYS; k++){
+    if (H[k]) continue;
+    let p = k - 1;
+    while (p > k - WAVE_RAYS && !H[((p % WAVE_RAYS) + WAVE_RAYS) % WAVE_RAYS]) p--;
+    let q = k + 1;
+    while (q < k + WAVE_RAYS && !H[q % WAVE_RAYS]) q++;
+    const pk = ((p % WAVE_RAYS) + WAVE_RAYS) % WAVE_RAYS;
+    const qk = q % WAVE_RAYS;
+    if (pk === qk) continue;
+    const f = (k - p) / (q - p);
+    R[k] = R[pk] + (R[qk] - R[pk]) * f;
+    H[k] = 1;
+  }
+
+  const tmp = new Float32Array(WAVE_RAYS);
+  for (let pass = 0; pass < 2; pass++){
+    for (let k = 0; k < WAVE_RAYS; k++){
+      const a = R[(k - 1 + WAVE_RAYS) % WAVE_RAYS];
+      const b = R[k];
+      const c = R[(k + 1) % WAVE_RAYS];
+      tmp[k] = (a + 2 * b + c) / 4;
+    }
+    R.set(tmp);
+  }
+  return true;
+}
+
+/* 绘制一圈波环：矢量描边，不做低分辨率位图放大
+   环宽 ≤ 6px；只画波峰线，平坦区与波谷完全透明 */
+const RING_BUCKETS = 10;
+function drawRing(slot, alphaMul, col, width){
+  const R = slotR[slot], A = slotA[slot], H = slotH[slot];
+  if (!smoothRing(R, H)) return;
+  const ref = slotRef[slot];
+  if (ref <= 0) return;
+
+  const maxR = Math.hypot(innerWidth, innerHeight) * 1.1;
+  const cx = bootSrc.cx, cy = bootSrc.cy;
+
+  /* 每射线不透明度：波峰强度（随扩散自然衰减） × 距离衰减 */
+  const alphas = new Float32Array(WAVE_RAYS);
+  for (let k = 0; k < WAVE_RAYS; k++){
+    if (!H[k]){ alphas[k] = 0; continue; }
+    const th = (k / WAVE_RAYS) * TAU;
+    const r = R[k] * cellPx;
+    const dist = Math.hypot(cx + Math.cos(th) * r - cx, cy + Math.sin(th) * r - cy);
+    const fade = clamp(1 - dist / maxR, 0, 1);
+    alphas[k] = clamp(A[k] / ref, 0, 1) * fade * alphaMul;
+  }
+
+  /* 按不透明度分桶，每桶一条 path → 避免逐段 stroke */
+  const paths = [];
+  for (let i = 0; i < RING_BUCKETS; i++) paths.push(null);
+
+  for (let k = 0; k < WAVE_RAYS; k++){
+    const a = alphas[k];
+    if (a <= 0.012) continue;
+    const th = (k / WAVE_RAYS) * TAU;
+    const r = R[k] * cellPx;
+    const x = cx + Math.cos(th) * r;
+    const y = cy + Math.sin(th) * r;
+    const b = Math.min(RING_BUCKETS - 1, Math.floor(a * RING_BUCKETS));
+    if (!paths[b]) paths[b] = new Path2D();
+    const p = paths[b];
+    const pa = alphas[(k - 1 + WAVE_RAYS) % WAVE_RAYS];
+    if (k === 0 || pa <= 0.012 || Math.floor(pa * RING_BUCKETS) !== b) p.moveTo(x, y);
+    else p.lineTo(x, y);
+  }
+
+  bctx.globalCompositeOperation = 'lighter';
+  bctx.lineCap = 'round';
+  bctx.lineJoin = 'round';
+
+  /* 柔光层（宽而淡）+ 主环（窄而亮），合计 ≤ 6px */
+  for (let i = 0; i < RING_BUCKETS; i++){
+    if (!paths[i]) continue;
+    const a = (i + 0.5) / RING_BUCKETS;
+    bctx.strokeStyle = `rgba(${col},${(a * 0.2 * alphaMul).toFixed(3)})`;
+    bctx.lineWidth = width;
+    bctx.stroke(paths[i]);
+  }
+  for (let i = 0; i < RING_BUCKETS; i++){
+    if (!paths[i]) continue;
+    const a = (i + 0.5) / RING_BUCKETS;
+    bctx.strokeStyle = `rgba(${col},${(a * alphaMul).toFixed(3)})`;
+    bctx.lineWidth = Math.max(1, width * 0.38);
+    bctx.stroke(paths[i]);
+  }
+  bctx.globalCompositeOperation = 'source-over';
+}
+
+function bootUp(){
+  if (S.screen !== 'lock') return;
+  S.screen = 'boot';
+
+  lockInner.style.transitionDuration = '720ms';
+  lockInner.style.transform = 'translateY(-38%) scale(.9)';
+  lockInner.style.opacity = '0';
+  lockInner.style.filter = 'blur(6px)';
+
+  setTimeout(() => {
+    lockEl.classList.remove('on');
+    lockInner.style.transitionDuration = '';
+    lockInner.style.transform = '';
+    lockInner.style.opacity = '';
+    lockInner.style.filter = '';
+
+    if (rm()){ goHome(); return; }
+
+    sizeBootFx();
+    setupWave();
+    measureOrb();
+    waveFrame = 0;
+    bootFx.classList.add('on');
+    bootStart = performance.now();
+    bootRaf = requestAnimationFrame(bootFrame);
+  }, 260);
+}
+
+function bootFrame(now){
+  const t = clamp((now - bootStart) / BOOT_DUR, 0, 1);
+  const W = innerWidth, H = innerHeight;
+  const { cx, cy } = bootSrc;
+
+  bctx.clearRect(0, 0, W, H);
+
+  const col = S.theme === 'dark' ? '212,230,250' : '56,72,96';
+  const FPS = 60;
+
+  if (t < WAVE_T_SIM){
+    /* ---- 正向模拟：波只向外扩散 ---- */
+    const total = Math.floor((now - bootStart) / 1000 * FPS);
+    const target = Math.min(total, waveFrame + 12);
+    while (waveFrame < target){
+      const ft = waveFrame / (BOOT_DUR / 1000 * FPS);
+      if (!pulseDone[0] && ft >= WAVE_T1){ inject(WAVE_AMP); pulseDone[0] = true; }
+      if (!pulseDone[1] && ft >= WAVE_T2){ inject(WAVE_AMP2); pulseDone[1] = true; }
+      for (let s = 0; s < WAVE_SUBSTEPS; s++) stepWave();
+      waveFrame++;
+    }
+    dampWave(WAVE_DAMP_SIM);
+
+    extractRings();
+    const fade = clamp((now - bootStart) / 180, 0, 1);
+    drawRing(0, fade, col, 5.2);
+    drawRing(1, fade * 0.6, col, 3.6);
+
+  } else if (t < WAVE_T_FLASH){
+    /* ---- 衰减段：阻尼吃掉剩余能量 ---- */
+    dampWave(WAVE_DAMP_DECAY);
+    extractRings();
+    const k = (t - WAVE_T_SIM) / (WAVE_T_FLASH - WAVE_T_SIM);
+    const a = 1 - k * 0.94;
+    drawRing(0, a, col, 5.2);
+    drawRing(1, a * 0.6, col, 3.6);
+
+  } else {
+    /* ---- 收束：球心径向闪光 ---- */
+    const p = clamp((t - WAVE_T_FLASH) / (1 - WAVE_T_FLASH), 0, 1);
+    const r = p * 64;
+    const a = 0.95 * (1 - p);
+    bctx.globalCompositeOperation = 'lighter';
+    const g = bctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, r));
+    const c2 = S.theme === 'dark' ? '190,215,245' : '42,54,74';
+    g.addColorStop(0, `rgba(255,255,255,${a})`);
+    g.addColorStop(0.35, `rgba(${c2},${a * 0.8})`);
+    g.addColorStop(1, `rgba(${c2},0)`);
+    bctx.fillStyle = g;
+    bctx.beginPath();
+    bctx.arc(cx, cy, Math.max(1, r), 0, Math.PI * 2);
+    bctx.fill();
+    bctx.globalCompositeOperation = 'source-over';
+  }
+
+  if (t < 1){
+    bootRaf = requestAnimationFrame(bootFrame);
+  } else {
+    bctx.clearRect(0, 0, W, H);
+    bootFx.classList.remove('on');
+    goHome();
+  }
+}
+
+/* =========================================================
+   主屏
+   ========================================================= */
+const HOME_LINE = '我们要构建什么？';
+const HOME_SUB  = '已读取 <em>12</em> 条消息 · 发现 <em>3</em> 条紧急<br>建议先确认 15:00 的架构评审';
+
+function goHome(){
+  S.screen = 'home';
+  homeEl.classList.add('on');
+  setBtn.classList.remove('show');
+  updateEdgeZone();
+  setTimeout(() => inputDock.classList.add('up'), 320);
+  setTimeout(() => typeHome(), 380);
+}
+
+function typeHome(){
+  if (S.typed) return;
+  let i = 0;
+  (function step(){
+    i++;
+    promptLine.innerHTML = HOME_LINE.slice(0, i) + '<span class="caret"></span>';
+    if (i < HOME_LINE.length){
+      setTimeout(step, 62 + Math.random() * 58);
+    } else {
+      S.typed = true;
+      setTimeout(() => {
+        promptLine.classList.add('done');
+        promptSub.innerHTML = HOME_SUB;
+        promptSub.classList.add('on');
+      }, 300);
+    }
+  })();
+}
+
+/* =========================================================
+   App 矩阵（平面平移 + 中心固定凸透镜）
+   ========================================================= */
+const RINGS = [
+  { n: 1,  r: 0,   size: 96, core: true },
+  { n: 6,  r: 90,  size: 56 },
+  { n: 11, r: 160, size: 44 },
+  { n: 14, r: 228, size: 36 }
+];
+const RING_DELAY = 70;
+const NODE_STAGGER = 18;
+const ENTRY_DUR = 550;
+const ENTRY_EASE = bezier(.34, 1.56, .64, 1);
+
+const LENS_R = 168;          // 凸透镜半径（屏幕 px）
+const LENS_POW = 2.2;        // 中心→边缘衰减曲线
+const LENS_GAIN = 0.5;       // 中心最大放大 1.5x
+const FOCUS_BOOST = 1.08;    // 焦点额外放大
+const SEL_BOOST = 1.12;      // 已聚焦（单击一次）的额外放大
+const FOCUS_GLIDE = 0.19;    // 视角平移到目标的每帧逼近系数
+const M_TAP_SLOP = 12;       // 触屏点击容差（px）：8 太紧，手指微抖就丢点
+const PAN_DAMP = 0.955;      // 惯性衰减
+const PAN_LIMIT_PAD = 1.0;   // 边界余量（屏宽高倍数）
+
+const rankedApps = AI_RANK.map(n => mockApps.find(a => a.name === n)).filter(Boolean);
+const appNodes = [];
+let mScale = 1;
+let mEntryStart = 0;
+let dragX = 0, dragY = 0, velX = 0, velY = 0;
+let centerFocus = -1;
+let panLimitX = 600, panLimitY = 800;
+let selIdx = -1;                  // 当前聚焦的 app（第一次点击进入，第二次点击才打开）
+let panTX = null, panTY = null;   // 视角平移目标（null = 无自动聚焦动画）
+
+function buildMatrix(){
+  mScene.innerHTML = '';
+  appNodes.length = 0;
+  let gIdx = 0;
+
+  RINGS.forEach((ring, ri) => {
+    if (ring.core){
+      /* 中心永远是 Kemon，不是任何一个第三方应用 */
+      const el = document.createElement('div');
+      el.className = 'app core';
+      el.style.width = el.style.height = ring.size + 'px';
+      el.innerHTML = `<span class="core-flame"></span><span class="core-mark"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.4c.8 5.5 4.1 8.8 9.6 9.6-5.5.8-8.8 4.1-9.6 9.6-.8-5.5-4.1-8.8-9.6-9.6 5.5-.8 8.8-4.1 9.6-9.6z"/></svg></span>`;
+      mScene.appendChild(el);
+      appNodes.push({
+        el, app: null, core: true, ri,
+        x: 0, y: 0, size: ring.size,
+        delay: 0, sx: 0, sy: 0, f: 0
+      });
+      return;
+    }
+
+    for (let i = 0; i < ring.n; i++){
+      const app = rankedApps[gIdx];
+      if (!app) break;
+
+      const a = (i / ring.n) * Math.PI * 2 - Math.PI / 2 + ri * 0.22;
+      const el = document.createElement('div');
+      el.className = 'app';
+      el.style.width = el.style.height = ring.size + 'px';
+      el.style.setProperty('--tint', app.iconColor);
+      el.innerHTML = iconSVG(app.id);
+
+      mScene.appendChild(el);
+      appNodes.push({
+        el, app, ri,
+        x: Math.cos(a) * ring.r,
+        y: Math.sin(a) * ring.r,
+        size: ring.size,
+        delay: ri * RING_DELAY + i * NODE_STAGGER,
+        sx: 0, sy: 0, f: 0
+      });
+      gIdx++;
+    }
+  });
+
+  computeScale();
+}
+
+function computeScale(){
+  const maxR = RINGS[RINGS.length - 1].r + RINGS[RINGS.length - 1].size / 2 + 6;
+  const fitW = (innerWidth + 30) / 2 / maxR;
+  const fitH = (innerHeight - 190) / 2 / maxR;
+  mScale = clamp(Math.min(fitW, fitH), 0.66, 1.08);
+  /* 允许把最外圈拖到中心：边界 ≈ 面板半径 + 一个屏宽/屏高 */
+  panLimitX = maxR * mScale + innerWidth * PAN_LIMIT_PAD;
+  panLimitY = maxR * mScale + innerHeight * PAN_LIMIT_PAD;
+}
+
+function menuOpen(){ return appMenu.classList.contains('on'); }
+
+/* ---------- 聚焦：视角平移到某个 app ---------- */
+function panTargetFor(i){
+  const n = appNodes[i];
+  return n ? { x: -n.x * mScale, y: -n.y * mScale } : { x: 0, y: 0 };
+}
+
+/* 第一次点击 → 聚焦：高亮 + 视点移到它身上（它落到屏幕中心后被凸透镜放大） */
+function selectApp(i){
+  const prev = selIdx;
+  if (prev >= 0 && appNodes[prev]) appNodes[prev].el.classList.remove('sel');
+  selIdx = (i >= 0 && appNodes[i] && !appNodes[i].core) ? i : -1;
+  matrixEl.classList.toggle('has-sel', selIdx >= 0);
+  clearTimeout(flashSub._t);
+
+  if (selIdx < 0){
+    panTX = null; panTY = null;
+    mSub.textContent = '按重要度推算 · 31 个节点';
+    mSub.classList.add('on');
+    return;
+  }
+
+  const n = appNodes[selIdx];
+  n.el.classList.add('sel');
+  markDirty();
+  const t = panTargetFor(selIdx);
+  velX = 0; velY = 0;
+  if (rm()){
+    /* 降级：不做镜头滑行，直接落到目标视角 */
+    dragX = t.x; dragY = t.y;
+    panTX = null; panTY = null;
+  } else {
+    panTX = t.x; panTY = t.y;
+  }
+  mSub.textContent = '已聚焦 ' + n.app.name + ' · 再点打开';
+  mSub.classList.add('on');
+}
+
+/* 静默清除聚焦（不打断正在进行的动画语义） */
+function clearSelect(){
+  if (selIdx >= 0 && appNodes[selIdx]) appNodes[selIdx].el.classList.remove('sel');
+  selIdx = -1;
+  panTX = null; panTY = null;
+  matrixEl.classList.remove('has-sel');
+  markDirty();
+}
+
+/* 中心固定凸透镜：所有 app 共用一个屏幕中心的放大区
+   屏幕坐标 sx/sy = 中心 + 节点坐标 + 拖拽偏移
+   距中心越近 → 越大、越实；越远 → 越小、越淡（但保留 0.45 底不消失） */
+function renderMatrix(now){
+  const elapsed = now - mEntryStart;
+  const cx = innerWidth / 2;
+  const cy = innerHeight / 2;
+
+  let bestIdx = -1, bestF = -1;
+
+  for (let i = 0; i < appNodes.length; i++){
+    const n = appNodes[i];
+    const sx = cx + n.x * mScale + dragX;
+    const sy = cy + n.y * mScale + dragY;
+    n.sx = sx; n.sy = sy;
+
+    const d = Math.hypot(sx - cx, sy - cy);
+    const u = clamp(d / LENS_R, 0, 1);
+    n.f = Math.pow(1 - u, LENS_POW);
+
+    if (n.f > bestF){ bestF = n.f; bestIdx = i; }
+  }
+  centerFocus = bestIdx;
+
+  for (let i = 0; i < appNodes.length; i++){
+    const n = appNodes[i];
+
+    let e = 1;
+    if (!rm() && elapsed < n.delay + ENTRY_DUR){
+      e = ENTRY_EASE(clamp((elapsed - n.delay) / ENTRY_DUR, 0, 1));
+    }
+
+    const isFocus = (i === centerFocus);
+    const isSel = (i === selIdx);
+    /* 聚焦应用会被镜头送到正中，正好压住 Kemon 核心 → 让核心退成背景 */
+    const coreAway = n.core && selIdx >= 0;
+    const sc = mScale * (1 + LENS_GAIN * n.f)
+             * (isFocus && !isSel ? FOCUS_BOOST : 1)
+             * (isSel ? SEL_BOOST : 1) * (coreAway ? 0.92 : 1) * e;
+    /* 有聚焦项时，其余节点再压一点透明度，让高亮更明确 */
+    const op = (0.45 + 0.55 * n.f) * (selIdx >= 0 && !isSel ? 0.82 : 1)
+             * (coreAway ? 0 : 1) * e;
+
+    n.el.style.transform =
+      `translate3d(${(n.x * mScale).toFixed(2)}px,${(n.y * mScale).toFixed(2)}px,0) ` +
+      `translate(-50%,-50%) scale(${sc.toFixed(3)})`;
+    n.el.style.opacity = op.toFixed(3);
+  }
+}
+
+function openMatrix(instant){
+  if (S.screen !== 'home') return;
+  hideMenu();
+  S.screen = 'matrix';
+  homeEl.classList.remove('on');
+  matrixEl.classList.add('on');
+  setBtn.classList.add('show');
+  updateEdgeZone();
+
+  mSub.textContent = '按重要度推算 · 31 个节点';
+  mSub.classList.add('on');
+
+  computeScale();
+  dragX = 0; dragY = 0; velX = 0; velY = 0;
+  clearSelect();
+  S.hoverIdx = -1; centerFocus = -1;
+  /* 键盘触发是高频动作 → 跳过入场动画，直接呈现 */
+  mEntryStart = instant ? performance.now() - 100000 : performance.now();
+  suppressBlankClose = performance.now() + 420;
+  mDirty = true;
+
+  if (!mRaf) mRaf = requestAnimationFrame(matrixFrame);
+}
+
+function closeMatrix(){
+  if (S.screen !== 'matrix') return;
+  hideMenu();
+  clearSelect();
+  S.screen = 'home';
+  matrixEl.classList.remove('on');
+  homeEl.classList.add('on');
+  setBtn.classList.remove('show');
+  updateEdgeZone();
+  renderChips();
+}
+
+/* =========================================================
+   矩阵拖拽：手势映射到平面平移
+   ========================================================= */
+let mg = null;
+let mRaf = 0;
+let mDirty = true;                       // 需要重绘（选中态变化、开关矩阵等一次性状态）
+const M_ENTRY_TOTAL = 3 * RING_DELAY + 11 * NODE_STAGGER + ENTRY_DUR + 60;
+
+function markDirty(){ mDirty = true; }
+
+function matrixFrame(now){
+  if (S.screen !== 'matrix'){ mRaf = 0; return; }
+
+  const inertial = !mg && (Math.abs(velX) > 0.02 || Math.abs(velY) > 0.02);
+  const gliding  = !mg && panTX !== null;
+
+  if (!mg){
+    if (panTX !== null){
+      /* 视角滑向聚焦目标：指数逼近，天然可打断、无回弹 */
+      dragX += (panTX - dragX) * FOCUS_GLIDE;
+      dragY += (panTY - dragY) * FOCUS_GLIDE;
+      if (Math.abs(panTX - dragX) < 0.4 && Math.abs(panTY - dragY) < 0.4){
+        dragX = panTX; dragY = panTY;
+        panTX = null; panTY = null;
+      }
+    } else if (Math.abs(velX) > 0.02 || Math.abs(velY) > 0.02){
+      dragX += velX;
+      dragY += velY;
+      velX *= PAN_DAMP;
+      velY *= PAN_DAMP;
+      if (Math.abs(velX) < 0.04) velX = 0;
+      if (Math.abs(velY) < 0.04) velY = 0;
+      clampDrag();
+    }
+  }
+
+  /* 静止时不再逐帧重写全部节点的 style：手机上空转会持续占主线程，点按会发虚 */
+  const entering = !rm() && (now - mEntryStart) < M_ENTRY_TOTAL;
+  if (mg || gliding || inertial || entering || mDirty){
+    mScene.style.transform = `translate3d(${dragX.toFixed(2)}px,${dragY.toFixed(2)}px,0)`;
+    renderMatrix(now);
+    mDirty = false;
+  }
+
+  mRaf = requestAnimationFrame(matrixFrame);
+}
+
+function clampDrag(){
+  /* 超出边界后回弹（软边界，不硬停） */
+  const ox = Math.max(0, Math.abs(dragX) - panLimitX);
+  const oy = Math.max(0, Math.abs(dragY) - panLimitY);
+  if (ox > 0){
+    dragX = Math.sign(dragX) * (panLimitX + ox * 0.35);
+    velX *= 0.4;
+  }
+  if (oy > 0){
+    dragY = Math.sign(dragY) * (panLimitY + oy * 0.35);
+    velY *= 0.4;
+  }
+}
+
+mViewport.addEventListener('pointerdown', (e) => {
+  /* 部分安卓 WebView 不给 isPrimary，这里只在"明确为 false"时跳过 */
+  if (S.screen !== 'matrix' || e.isPrimary === false) return;
+  if (menuOpen()) return;
+
+  /* 手一碰就接管：正在进行的聚焦平移立刻停住 */
+  panTX = null; panTY = null;
+
+  /* 命中判定用当前屏幕位置（凸透镜放大后的实际位置） */
+  const hitApp = hitTest(e.clientX, e.clientY);
+  mg = {
+    x: e.clientX, y: e.clientY,
+    sx: e.clientX, sy: e.clientY,
+    moved: 0, t: performance.now(),
+    appEl: hitApp
+  };
+
+  if (hitApp){
+    mg.longTimer = setTimeout(() => {
+      if (mg && mg.moved < M_TAP_SLOP){
+        mg.longFired = true;
+        const idx = appNodes.findIndex(n => n.el === hitApp);
+        if (idx >= 0 && !appNodes[idx].core){
+          S.hoverIdx = idx;
+          showMenu(appNodes[idx]);
+        }
+      }
+    }, 480);
+  }
+});
+
+/* 屏幕坐标命中：靠近 app 当前渲染位置即算命中（透镜放大后半径同步放大） */
+function hitTest(cx, cy){
+  let best = null, bestD = Infinity;
+  for (const n of appNodes){
+    const sc = mScale * (1 + LENS_GAIN * n.f);
+    const r = n.size * sc * 0.5 + 10;
+    const d = Math.hypot(cx - n.sx, cy - n.sy);
+    if (d < r && d < bestD){ bestD = d; best = n.el; }
+  }
+  return best;
+}
+
+mViewport.addEventListener('pointermove', (e) => {
+  if (!mg || S.screen !== 'matrix') return;
+  const dx = e.clientX - mg.sx;
+  const dy = e.clientY - mg.sy;
+  mg.moved = Math.max(mg.moved, Math.hypot(dx, dy));
+
+  if (mg.moved > M_TAP_SLOP){
+    if (mg.longTimer){ clearTimeout(mg.longTimer); mg.longTimer = null; }
+    S.hoverIdx = -1;
+    /* 用户自己接管视角 → 退出聚焦 */
+    if (selIdx >= 0) selectApp(-1);
+
+    dragX += e.clientX - mg.x;
+    dragY += e.clientY - mg.y;
+    velX = e.clientX - mg.x;
+    velY = e.clientY - mg.y;
+    clampDrag();
+  }
+  mg.x = e.clientX; mg.y = e.clientY;
+});
+
+function endMatrixDrag(e, cancel){
+  if (!mg) return;
+  if (mg.longTimer) clearTimeout(mg.longTimer);
+
+  const el = mg.appEl;
+  const isTap = !cancel && mg.moved < M_TAP_SLOP && !mg.longFired && (performance.now() - mg.t < 600);
+  mg = null;
+
+  if (isTap){
+    if (el){
+      const idx = appNodes.findIndex(n => n.el === el);
+      if (idx >= 0){
+        if (appNodes[idx].core){
+          /* 点中心 = 回到 Kemon 对话，而不是打开某个第三方应用 */
+          closeMatrix();
+        } else if (selIdx === idx){
+          /* 第二次点击同一个 → 真正打开 */
+          const app = appNodes[idx].app;
+          clearSelect();
+          launchApp(app);
+        } else {
+          /* 第一次点击 → 只聚焦：高亮 + 视角转过去 */
+          selectApp(idx);
+        }
+      }
+    } else if (selIdx >= 0){
+      /* 有聚焦项时，点空白先退出聚焦（再点一次才收回矩阵） */
+      selectApp(-1);
+    } else if (performance.now() > suppressBlankClose){
+      closeMatrix();
+    }
+  }
+}
+
+mViewport.addEventListener('pointerup', (e) => endMatrixDrag(e, false));
+mViewport.addEventListener('pointercancel', (e) => endMatrixDrag(e, true));
+
+/* 鼠标 hover 只做高亮提示，不改 scale（避免与中心焦点打架） */
+mViewport.addEventListener('pointerover', (e) => {
+  if (e.pointerType !== 'mouse' || menuOpen() || mg) return;
+  const el = e.target.closest('.app');
+  if (!el) return;
+  const i = appNodes.findIndex(n => n.el === el);
+  if (i >= 0){ S.hoverIdx = i; el.classList.add('hover'); }
+});
+mViewport.addEventListener('pointerout', (e) => {
+  if (e.pointerType !== 'mouse' || menuOpen() || mg) return;
+  const el = e.target.closest('.app');
+  if (el) el.classList.remove('hover');
+  S.hoverIdx = -1;
+});
+
+/* =========================================================
+   长按菜单
+   ========================================================= */
+let menuNode = null;
+let suppressBlankClose = 0;
+
+function showMenu(node){
+  menuNode = node;
+  const r = node.el.getBoundingClientRect();
+  const cxIcon = r.left + r.width / 2;
+  const cyIcon = r.top + r.height / 2;
+
+  amName.textContent = node.app.name;
+  amDot.style.color = node.app.iconColor;
+  amDot.innerHTML = iconSVG(node.app.id, 16);
+
+  appMenu.style.transitionDuration = '0ms';
+  appMenu.classList.remove('on');
+  appMenu.style.left = '0px';
+  appMenu.style.top = '0px';
+
+  const mw = appMenu.offsetWidth || 170;
+  const mh = appMenu.offsetHeight || 120;
+
+  const left = clamp(cxIcon - mw / 2, 14, innerWidth - mw - 14);
+  let top = r.top - mh - 12;
+  if (top < 84) top = r.bottom + 12;
+  top = clamp(top, 14, innerHeight - mh - 14);
+
+  appMenu.style.left = left + 'px';
+  appMenu.style.top = top + 'px';
+  appMenu.style.transformOrigin = `${(cxIcon - left).toFixed(1)}px ${(cyIcon - top).toFixed(1)}px`;
+
+  menuScrim.classList.add('on');
+  requestAnimationFrame(() => {
+    appMenu.style.transitionDuration = '';
+    appMenu.classList.add('on');
+  });
+}
+
+function hideMenu(){
+  if (!menuNode && !appMenu.classList.contains('on')) return;
+  appMenu.classList.remove('on');
+  menuScrim.classList.remove('on');
+  menuNode = null;
+  if (!menuOpen()) S.hoverIdx = -1;
+}
+
+menuScrim.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  hideMenu();
+  suppressBlankClose = performance.now() + 350;
+});
+
+appMenu.addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || !menuNode) return;
+  const act = btn.dataset.act;
+  const node = menuNode;
+  hideMenu();
+  if (act === 'open') launchApp(node.app);
+  if (act === 'agent') addAgentObject(node.app);
+});
+
+document.addEventListener('pointerdown', (e) => {
+  if (appMenu.classList.contains('on') && !e.target.closest('.app-menu') && !e.target.closest('.menu-scrim')){
+    hideMenu();
+    suppressBlankClose = performance.now() + 350;
+  }
+}, true);
+
+/* =========================================================
+   打开应用 / Agent 对象
+   ========================================================= */
+let launchTimer = null;
+
+function launchApp(app){
+  clearSelect();
+  mSub.textContent = '按重要度推算 · 31 个节点';
+  const dark = document.documentElement.dataset.theme === 'dark';
+  launchEl.style.setProperty('--launch-tint', rgba(app.iconColor, dark ? .16 : .1));
+  launchIcon.style.setProperty('--tint', app.iconColor);
+  launchIcon.innerHTML = iconSVG(app.id, 36);
+  launchName.textContent = app.name;
+  launchEl.classList.add('on');
+  clearTimeout(launchTimer);
+  if (app.id === 'settings'){
+    launchTimer = setTimeout(() => {
+      openDroid();
+      launchEl.classList.remove('on');
+    }, 700);
+    return;
+  }
+  launchTimer = setTimeout(() => launchEl.classList.remove('on'), 1250);
+}
+
+function addAgentObject(app){
+  if (S.agentObjects.some(o => o.name === app.name)){
+    flashSub('已在 Agent 框中 · ' + app.name);
+    return;
+  }
+  S.agentObjects.push({ name: app.name, color: app.iconColor, icon: app.id });
+  renderChips();
+  flashSub('已加入 Agent 框 · ' + app.name);
+}
+
+function renderChips(){
+  agentChips.innerHTML = '';
+  if (!S.agentObjects.length){
+    agentChips.classList.remove('on');
+    return;
+  }
+  S.agentObjects.forEach(o => {
+    const c = document.createElement('span');
+    c.className = 'chip';
+    c.innerHTML = `<i style="--tint:${o.color}">${iconSVG(o.icon, 12)}</i><b>${o.name}</b>`;
+    agentChips.appendChild(c);
+  });
+  agentChips.classList.add('on');
+}
+
+function flashSub(text){
+  mSub.textContent = text;
+  mSub.classList.add('on');
+  clearTimeout(flashSub._t);
+  flashSub._t = setTimeout(() => { mSub.textContent = '按重要度推算 · 31 个节点'; }, 1600);
+}
+
+/* =========================================================
+   手势 & 键盘
+   ========================================================= */
+/* Safari 的双指缩放会抢走自定义手势，直接在文档层挡掉 */
+['gesturestart', 'gesturechange', 'gestureend'].forEach((t) => {
+  document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+});
+
+document.addEventListener('touchstart', (e) => {
+  if (S.settingsOpen || S.agOpen || droidEl.classList.contains('on')) return;
+  if (e.touches.length === 3){
+    e.preventDefault();
+    if (S.screen === 'home') openMatrix();
+    else if (S.screen === 'matrix') closeMatrix();
+  }
+}, { passive: false });
+
+window.addEventListener('keydown', (e) => {
+  const inInput = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+
+  if (droidEl.classList.contains('on')){
+    if (e.code === 'Escape'){ e.preventDefault(); droidBack(); return; }
+    if (!inInput) return;
+  }
+
+  if (S.agOpen){
+    if (e.code === 'Escape'){
+      e.preventDefault();
+      if (agEl.classList.contains('chat')) showAgList();
+      else closeAg();
+      return;
+    }
+    if (!inInput) return;
+  }
+
+  if (S.settingsOpen && e.code !== 'Escape' && !inInput) return;
+
+  if (e.code === 'Space'){
+    if (inInput || S.settingsOpen) return;
+    e.preventDefault();
+    /* 键盘是高频动作 → 矩阵直接出现，不播入场动画 */
+    if (S.screen === 'home') openMatrix(true);
+    else if (S.screen === 'matrix') closeMatrix();
+    else if (S.screen === 'lock') bootUp();
+    return;
+  }
+
+  if (e.code === 'Escape'){
+    if (S.settingsOpen){ closeSettings(); return; }
+    if (S.screen === 'matrix'){
+      /* 有聚焦项先退聚焦，再退矩阵 */
+      if (selIdx >= 0) selectApp(-1);
+      else closeMatrix();
+    }
+    else if (S.screen === 'lock'){
+      if (S.mode === 'detail') closeDetail();
+      else if (S.mode === 'expanded') toGrouped(S.group);
+    }
+    hideMenu();
+    return;
+  }
+
+  if (e.code === 'ArrowUp' && S.screen === 'lock' && S.mode === 'flat'){
+    e.preventDefault(); bootUp(); return;
+  }
+
+  if (inInput) return;
+
+  if (S.screen === 'lock' && /^Digit[1-4]$/.test(e.code)){
+    const g = GROUP_ORDER[Number(e.code.slice(5)) - 1];
+    if (g) toExpanded(g);
+    return;
+  }
+
+  const k = e.key.toLowerCase();
+  if (k === 'g' && S.screen === 'lock'){
+    S.mode === 'flat' ? toGrouped() : toFlat();
+  }
+  if (k === 't') toggleTheme();
+});
+
+/* Android 外壳的返回键：页面先吃掉一层，返回 false 才交给系统退出 */
+window.kemonAndroidBack = function(){
+  if (droidEl.classList.contains('on')){ droidBack(); return true; }
+  if (S.agOpen){
+    if (agEl.classList.contains('chat')) showAgList();
+    else closeAg();
+    return true;
+  }
+  if (S.settingsOpen){ closeSettings(); return true; }
+  if (S.screen === 'matrix'){
+    hideMenu();
+    if (selIdx >= 0) selectApp(-1);
+    else closeMatrix();
+    return true;
+  }
+  if (S.screen === 'lock'){
+    if (S.mode === 'detail'){ closeDetail(); return true; }
+    if (S.mode === 'expanded'){ toGrouped(S.group); return true; }
+  }
+  return false;
+};
+
+/* =========================================================
+   主题 & Kemon 接入配置
+   ========================================================= */
+const THEME_KEY = 'cintyez.theme';
+let themePref = 'system';
+try { themePref = localStorage.getItem(THEME_KEY) || 'system'; } catch (_) {}
+
+function systemDark(){
+  const q = location.search;
+  if (q.indexOf('systemDark=1') >= 0) return true;
+  if (q.indexOf('systemDark=0') >= 0) return false;
+  return matchMedia('(prefers-color-scheme: dark)').matches;
+}
+function resolveDark(pref){
+  return pref === 'dark' || (pref === 'system' && systemDark());
+}
+function applyTheme(pref, persist){
+  themePref = pref;
+  const dark = resolveDark(pref);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  S.theme = dark ? 'dark' : 'light';
+  if (persist){ try { localStorage.setItem(THEME_KEY, pref); } catch (_) {} }
+  themeSeg.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', b.dataset.themeOpt === pref);
+  });
+  const dsw = document.getElementById('droidDarkSwitch');
+  if (dsw){
+    dsw.setAttribute('aria-checked', String(dark));
+    paintDroidTheme();
+  }
+  paintQuick();
+}
+function toggleTheme(){ applyTheme(resolveDark(themePref) ? 'light' : 'dark', true); }
+
+themeSeg.addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-theme-opt]');
+  if (!b) return;
+  applyTheme(b.dataset.themeOpt, true);
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  /* Android 外壳由原生重建 Activity 来更新 systemDark，不受这里的 media 事件影响 */
+  if (themePref === 'system' && !/[?&]systemDark=/.test(location.search)) applyTheme('system', false);
+});
+
+/* Kemon 的唯一配置源。接真实后端时，只需要替换 kemonChat 里的实现。 */
+const KEMON_KEY = 'cintyez.kemon';
+const KEMON = {
+  cfg: { base:'', model:'', key:'', temp:0.6 },
+  load(){
+    try {
+      const raw = localStorage.getItem(KEMON_KEY);
+      if (raw) Object.assign(this.cfg, JSON.parse(raw));
+    } catch (_) {}
+  },
+  save(){
+    try { localStorage.setItem(KEMON_KEY, JSON.stringify(this.cfg)); } catch (_) {}
+  },
+  read(){
+    this.cfg.base = cfgBase.value.trim();
+    this.cfg.model = cfgModel.value.trim();
+    this.cfg.key = cfgKey.value.trim();
+    this.cfg.temp = Number(cfgTemp.value);
+  },
+  fill(){
+    cfgBase.value = this.cfg.base || '';
+    cfgModel.value = this.cfg.model || '';
+    cfgKey.value = this.cfg.key || '';
+    cfgTemp.value = String(this.cfg.temp ?? 0.6);
+    cfgTempVal.textContent = Number(cfgTemp.value).toFixed(2);
+  },
+  connected(){ return !!(this.cfg.base && this.cfg.model && this.cfg.key); }
+};
+
+function paintKemonStatus(){
+  const ok = KEMON.connected();
+  setBadge.textContent = ok ? '已配置' : '未接入';
+  setBadge.classList.toggle('ok', ok);
+  homeKemon.classList.toggle('ok', ok);
+  homeKemon.querySelector('span').textContent = ok ? ('KEMON · ' + KEMON.cfg.model) : 'KEMON · 未接入';
+  paintAgState();
+}
+
+/* 推理入口：原型不发起请求；接后端时改这里即可。 */
+async function kemonChat(messages){
+  const c = { ...KEMON.cfg };
+  if (!c.base || !c.model) throw new Error('KEMON_NOT_CONFIGURED');
+  return { pending:true, model:c.model, messages };
+}
+window.kemon = {
+  get config(){ return { ...KEMON.cfg }; },
+  chat: kemonChat,
+  openSettings,
+  version: '0.1'
+};
+
+[cfgBase, cfgModel, cfgKey].forEach(el => {
+  el.addEventListener('input', () => {
+    KEMON.read(); KEMON.save(); paintKemonStatus();
+    cfgHint.textContent = '已保存 · 仅存于本机';
+    cfgHint.className = 'set-hint';
+  });
+});
+cfgTemp.addEventListener('input', () => {
+  cfgTempVal.textContent = Number(cfgTemp.value).toFixed(2);
+  KEMON.read(); KEMON.save();
+});
+cfgTest.addEventListener('click', () => {
+  KEMON.read(); KEMON.save(); paintKemonStatus();
+  if (!KEMON.cfg.base || !KEMON.cfg.model){
+    cfgHint.textContent = '缺少接口地址或模型'; cfgHint.className = 'set-hint bad'; return;
+  }
+  let urlOk = true;
+  try { new URL(KEMON.cfg.base); } catch (_) { urlOk = false; }
+  if (!urlOk){
+    cfgHint.textContent = '接口地址格式不正确'; cfgHint.className = 'set-hint bad'; return;
+  }
+  if (!KEMON.cfg.key){
+    cfgHint.textContent = '缺少 API Key'; cfgHint.className = 'set-hint bad'; return;
+  }
+  cfgTest.disabled = true;
+  cfgHint.textContent = '正在检查通道…';
+  cfgHint.className = 'set-hint';
+  setTimeout(() => {
+    cfgTest.disabled = false;
+    cfgHint.textContent = '通道已就绪 · 原型不会真的请求';
+    cfgHint.className = 'set-hint ok';
+    paintKemonStatus();
+  }, 850);
+});
+
+/* =========================================================
+   设置抽屉：系统层，不是矩阵里的应用
+   ========================================================= */
+function paintQuick(){
+  const dark = S.theme === 'dark';
+  qWifi.classList.toggle('on', wifiOn);
+  qWifi.setAttribute('aria-pressed', String(wifiOn));
+  qWifiSub.textContent = wifiOn ? wifiNet : '已关闭';
+  qBt.classList.toggle('on', btOn);
+  qBt.setAttribute('aria-pressed', String(btOn));
+  qBtSub.textContent = btOn ? 'Kemon Buds' : '已关闭';
+  qDnd.classList.toggle('on', dndOn);
+  qDnd.setAttribute('aria-pressed', String(dndOn));
+  qDndSub.textContent = dndOn ? '仅静默提醒' : '通知正常';
+  qDark.classList.toggle('on', dark);
+  qDark.setAttribute('aria-pressed', String(dark));
+  qDarkSub.textContent = dark ? '已开启' : '已关闭';
+  dSumBt.textContent = btOn ? '蓝牙 · Kemon Buds' : '蓝牙已关闭';
+}
+
+qWifi.addEventListener('click', () => { wifiOn = !wifiOn; paintWifi(); });
+qBt.addEventListener('click', () => {
+  btOn = !btOn;
+  paintQuick();
+  if (droidEl.classList.contains('on')) showDroidToast(btOn ? '蓝牙已开启' : '蓝牙已关闭');
+});
+qDnd.addEventListener('click', () => {
+  dndOn = !dndOn;
+  paintQuick();
+});
+qDark.addEventListener('click', () => {
+  applyTheme(S.theme === 'dark' ? 'light' : 'dark', true);
+});
+
+moreSetBtn.addEventListener('click', () => {
+  closeSettings();
+  setTimeout(openDroid, 240);
+});
+
+function updateEdgeZone(){
+  const can = !S.settingsOpen && !S.agOpen && !droidEl.classList.contains('on') &&
+    (S.screen === 'home' || S.screen === 'matrix');
+  edgeZone.classList.toggle('on', can);
+  leftEdgeZone.classList.toggle('on', can);
+}
+
+function openSettings(){
+  if (S.settingsOpen) return;
+  if (S.agOpen) closeAg();
+  S.settingsOpen = true;
+  hideMenu();
+  settingsEl.classList.remove('dragging');
+  settingsEl.style.transform = '';
+  settingsEl.classList.add('on');
+  setScrim.classList.add('on');
+  setScrim.style.opacity = '';
+  setScrim.style.transition = '';
+  setScrim.style.pointerEvents = '';
+  settingsEl.setAttribute('aria-hidden', 'false');
+  setBtn.classList.remove('show');
+  updateEdgeZone();
+}
+
+function closeSettings(){
+  if (!S.settingsOpen) return;
+  S.settingsOpen = false;
+  settingsEl.classList.remove('on', 'dragging');
+  settingsEl.style.transform = '';
+  setScrim.classList.remove('on');
+  settingsEl.setAttribute('aria-hidden', 'true');
+  if (S.screen === 'matrix') setBtn.classList.add('show');
+  KEMON.read(); KEMON.save(); paintKemonStatus();
+  updateEdgeZone();
+}
+
+setBtn.addEventListener('click', openSettings);
+homeKemon.addEventListener('click', () => {
+  if (S.screen === 'home') openAg();
+});
+setClose.addEventListener('click', closeSettings);
+setScrim.addEventListener('click', closeSettings);
+
+/* 右缘左滑拉出 */
+let edgeDrag = null;
+
+edgeZone.addEventListener('pointerdown', (e) => {
+  if (S.settingsOpen || (S.screen !== 'home' && S.screen !== 'matrix')) return;
+  edgeDrag = { x: e.clientX, t: performance.now(), p: 0 };
+  settingsEl.classList.add('dragging');
+  settingsEl.style.transform = 'translateX(100%)';
+  setScrim.style.transition = 'none';
+  setScrim.style.opacity = '0';
+  setScrim.style.pointerEvents = 'auto';
+  try { edgeZone.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+edgeZone.addEventListener('pointermove', (e) => {
+  if (!edgeDrag) return;
+  const w = settingsEl.offsetWidth || 360;
+  const p = clamp((edgeDrag.x - e.clientX) / w, 0, 1);
+  edgeDrag.p = p;
+  settingsEl.style.transform = `translateX(${((1 - p) * 100).toFixed(2)}%)`;
+  setScrim.style.opacity = (p * 0.85).toFixed(3);
+});
+
+function edgeEnd(){
+  if (!edgeDrag) return;
+  const { p, t } = edgeDrag;
+  const dt = Math.max(performance.now() - t, 1);
+  edgeDrag = null;
+  const velocity = p / dt;
+  settingsEl.classList.remove('dragging');
+  settingsEl.style.transform = '';
+  setScrim.style.transition = '';
+  setScrim.style.opacity = '';
+  setScrim.style.pointerEvents = '';
+  if (p > 0.28 || (p > 0.05 && velocity > 0.0012)) openSettings();
+  else setScrim.classList.remove('on');
+}
+
+edgeZone.addEventListener('pointerup', edgeEnd);
+edgeZone.addEventListener('pointercancel', () => {
+  if (!edgeDrag) return;
+  edgeDrag = null;
+  settingsEl.classList.remove('dragging');
+  settingsEl.style.transform = '';
+  setScrim.style.transition = '';
+  setScrim.style.opacity = '';
+  setScrim.style.pointerEvents = '';
+});
+
+/* 顶部握把右滑关闭 */
+let grabDrag = null;
+
+setGrab.addEventListener('pointerdown', (e) => {
+  if (!S.settingsOpen) return;
+  grabDrag = { x: e.clientX, t: performance.now(), p: 0 };
+  settingsEl.classList.add('dragging');
+  setScrim.style.transition = 'none';
+  try { setGrab.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+setGrab.addEventListener('pointermove', (e) => {
+  if (!grabDrag) return;
+  const w = settingsEl.offsetWidth || 360;
+  const p = clamp((e.clientX - grabDrag.x) / w, 0, 1);
+  grabDrag.p = p;
+  settingsEl.style.transform = `translateX(${(p * 100).toFixed(2)}%)`;
+  setScrim.style.opacity = (1 - p * 0.85).toFixed(3);
+});
+
+function grabEnd(){
+  if (!grabDrag) return;
+  const { p, t } = grabDrag;
+  const dt = Math.max(performance.now() - t, 1);
+  grabDrag = null;
+  const velocity = p / dt;
+  settingsEl.classList.remove('dragging');
+  settingsEl.style.transform = '';
+  setScrim.style.transition = '';
+  setScrim.style.opacity = '';
+  if (p > 0.28 || (p > 0.05 && velocity > 0.0012)) closeSettings();
+}
+
+setGrab.addEventListener('pointerup', grabEnd);
+setGrab.addEventListener('pointercancel', () => {
+  if (!grabDrag) return;
+  grabDrag = null;
+  settingsEl.classList.remove('dragging');
+  settingsEl.style.transform = '';
+  setScrim.style.transition = '';
+  setScrim.style.opacity = '';
+});
+
+/* =========================================================
+   更多设置：Android 风格彩蛋
+   ========================================================= */
+const droidEl = document.getElementById('droid');
+const droidTime = document.getElementById('droidTime');
+const droidSearch = document.getElementById('droidSearch');
+const droidClear = document.getElementById('droidClear');
+const droidEmpty = document.getElementById('droidEmpty');
+const droidSub = document.getElementById('droidSub');
+const dSubTitle = document.getElementById('dSubTitle');
+const dSubScroll = document.getElementById('dSubScroll');
+const droidToast = document.getElementById('droidToast');
+const dSumWifi = document.getElementById('dSumWifi');
+const dSumBt = document.getElementById('dSumBt');
+const dSumDisplay = document.getElementById('dSumDisplay');
+const wifiSwitch = document.getElementById('wifiSwitch');
+const wifiState = document.getElementById('wifiState');
+const wifiAvailable = document.getElementById('wifiAvailable');
+const wifiConnectedName = document.getElementById('wifiConnectedName');
+const wifiNetworks = document.getElementById('wifiNetworks');
+const droidDarkSwitch = document.getElementById('droidDarkSwitch');
+const autoBrightSwitch = document.getElementById('autoBrightSwitch');
+const droidBrightness = document.getElementById('droidBrightness');
+const screenDim = document.getElementById('screenDim');
+
+let droidSubOpen = false;
+let droidToastTimer = null;
+let wifiOn = true;
+let wifiNet = 'Cintyez-5G';
+let btOn = false;
+let dndOn = false;
+let autoBright = true;
+
+function updateDroidTime(){
+  const d = new Date();
+  droidTime.textContent =
+    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+setInterval(updateDroidTime, 30000);
+
+function showDroidToast(msg){
+  droidToast.textContent = msg;
+  droidToast.classList.add('on');
+  clearTimeout(droidToastTimer);
+  droidToastTimer = setTimeout(() => droidToast.classList.remove('on'), 1900);
+}
+
+function paintDroidTheme(){
+  droidDarkSwitch.setAttribute('aria-checked', String(S.theme === 'dark'));
+  dSumDisplay.textContent =
+    (S.theme === 'dark' ? '深色主题' : '浅色主题') +
+    ' · ' + (autoBright ? '自动亮度' : '手动亮度');
+}
+
+function paintWifi(){
+  wifiSwitch.setAttribute('aria-checked', String(wifiOn));
+  wifiState.textContent = wifiOn ? '已连接到 ' + wifiNet : 'Wi-Fi 已关闭';
+  wifiAvailable.hidden = !wifiOn;
+  wifiConnectedName.textContent = wifiNet;
+  dSumWifi.textContent = wifiOn ? 'Wi-Fi · 已连接 ' + wifiNet : 'Wi-Fi 已关闭';
+  wifiNetworks.querySelectorAll('[data-net]').forEach(row => {
+    const on = wifiOn && row.dataset.net === wifiNet;
+    row.classList.toggle('is-connected', on);
+    row.querySelector('small').textContent = on
+      ? '已连接 · ' + (row.dataset.net === '602' ? '开放网络' : '已加密')
+      : (row.dataset.net === '602' ? '开放网络' : '已加密');
+  });
+  paintQuick();
+}
+
+function paintAutoBright(){
+  autoBrightSwitch.setAttribute('aria-checked', String(autoBright));
+}
+
+function openDroid(){
+  if (droidEl.classList.contains('on')) return;
+  if (S.agOpen) closeAg();
+  if (S.settingsOpen) closeSettings();
+  updateDroidTime();
+  closeDroidSub();
+  if (droidSearch.value){
+    droidSearch.value = '';
+    filterDroid();
+  }
+  paintDroidTheme();
+  paintWifi();
+  paintAutoBright();
+  droidEl.classList.add('on');
+  droidEl.setAttribute('aria-hidden', 'false');
+  updateEdgeZone();
+}
+
+function closeDroid(){
+  if (!droidEl.classList.contains('on')) return;
+  closeDroidSub();
+  droidToast.classList.remove('on');
+  clearTimeout(droidToastTimer);
+  droidEl.classList.remove('on');
+  droidEl.setAttribute('aria-hidden', 'true');
+  updateEdgeZone();
+}
+
+function droidBack(){
+  if (droidSubOpen) closeDroidSub();
+  else closeDroid();
+}
+
+function openDroidSub(key, title){
+  dSubTitle.textContent = title || '';
+  droidSub.querySelectorAll('.d-subpage').forEach(p => {
+    p.hidden = p.dataset.sub !== key;
+  });
+  dSubScroll.scrollTop = 0;
+  droidSub.classList.add('on');
+  droidSub.setAttribute('aria-hidden', 'false');
+  droidEl.classList.add('sub-open');
+  droidSubOpen = true;
+  if (key === 'display') paintDroidTheme();
+}
+
+function closeDroidSub(){
+  if (!droidSubOpen) return;
+  droidSubOpen = false;
+  droidSub.classList.remove('on');
+  droidSub.setAttribute('aria-hidden', 'true');
+  droidEl.classList.remove('sub-open');
+}
+
+function filterDroid(){
+  const q = droidSearch.value.trim().toLowerCase();
+  let any = false;
+  droidEl.querySelectorAll('.d-group').forEach(group => {
+    let visible = 0;
+    group.querySelectorAll('.d-row').forEach(row => {
+      const hit = !q || row.textContent.toLowerCase().includes(q);
+      row.style.display = hit ? '' : 'none';
+      if (hit) visible++;
+    });
+    group.style.display = visible ? '' : 'none';
+    if (visible) any = true;
+  });
+  droidEmpty.classList.toggle('on', !any);
+}
+
+document.getElementById('droidClose').addEventListener('click', closeDroid);
+document.getElementById('dSubBack').addEventListener('click', closeDroidSub);
+
+droidSearch.addEventListener('input', filterDroid);
+droidClear.addEventListener('click', () => {
+  droidSearch.value = '';
+  filterDroid();
+  droidSearch.focus();
+});
+
+droidEl.querySelectorAll('.d-row[data-sub]').forEach(row => {
+  row.addEventListener('click', () => openDroidSub(row.dataset.sub, row.dataset.title));
+});
+droidEl.querySelectorAll('[data-toast]').forEach(el => {
+  el.addEventListener('click', () => showDroidToast(el.dataset.toast));
+});
+
+wifiSwitch.addEventListener('click', () => {
+  wifiOn = !wifiOn;
+  paintWifi();
+});
+wifiNetworks.addEventListener('click', (e) => {
+  const row = e.target.closest('[data-net]');
+  if (!row || !wifiOn) return;
+  wifiNet = row.dataset.net;
+  paintWifi();
+  showDroidToast('已连接到 ' + wifiNet);
+});
+
+droidDarkSwitch.addEventListener('click', () => {
+  applyTheme(S.theme === 'dark' ? 'light' : 'dark', true);
+  paintDroidTheme();
+});
+autoBrightSwitch.addEventListener('click', () => {
+  autoBright = !autoBright;
+  paintAutoBright();
+  paintDroidTheme();
+});
+
+droidBrightness.addEventListener('input', () => {
+  const v = Number(droidBrightness.value);
+  droidBrightness.style.setProperty('--fill', v + '%');
+  screenDim.style.opacity = ((100 - v) / 100 * .62).toFixed(3);
+});
+
+paintWifi();
+paintAutoBright();
+
+/* =========================================================
+   Kemon 智能体抽屉：会话入口，不是完整的聊天 App
+   ========================================================= */
+const AG_ICON = {
+  bell:'<svg viewBox="0 0 24 24"><path d="M12 4a5 5 0 0 0-5 5v3l-1.6 2.7h13.2L17 12V9a5 5 0 0 0-5-5Z"/><path d="M10 18a2 2 0 0 0 4 0"/></svg>',
+  grid:'<svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>',
+  inbox:'<svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 13h4l1.5 2h5L16 13h4"/></svg>',
+  spark:'<svg viewBox="0 0 24 24"><path d="M12 3c.7 4.6 3.4 7.3 8 8-4.6.7-7.3 3.4-8 8-.7-4.6-3.4-7.3-8-8 4.6-.7 7.3-3.4 8-8Z"/></svg>',
+  apps:'<svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M17 14v6M14 17h6"/></svg>',
+  chat:'<svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg>'
+};
+
+const AG_SESSIONS = [
+  {
+    id:'s1', ws:'桌面', time:'14:32', icon:'bell', title:'为什么通知这么多',
+    msgs:[
+      { r:'u', t:'为什么今天通知这么多？' },
+      { r:'k', t:'三条来自微信，两条来自日历。日历那两条其实是同一个日程的两段提醒，可以合并成一条。' }
+    ]
+  },
+  {
+    id:'s2', ws:'设计', time:'昨天', icon:'grid', title:'把矩阵的深色再压暗一点',
+    msgs:[
+      { r:'u', t:'矩阵在深色里还是有一点灰，能再压暗吗？' },
+      { r:'k', t:'可以。把节点底色降到 4%，外圈描边再收 1%，矩阵就会沉下去，但最外圈仍然看得清。' }
+    ]
+  },
+  {
+    id:'s3', ws:'桌面', time:'周二', icon:'inbox', title:'整理锁屏上的消息',
+    msgs:[
+      { r:'u', t:'帮我把锁屏通知按重要度排一下。' },
+      { r:'k', t:'已经按「人 > 日程 > 系统」排好。广告类折叠到最后，只保留一条摘要。' }
+    ]
+  },
+  {
+    id:'s4', ws:'记忆', time:'上周', icon:'spark', title:'记住我喜欢安静的动画',
+    msgs:[
+      { r:'u', t:'记住：我喜欢短、安静、不弹跳的动画。' },
+      { r:'k', t:'记住了。之后默认用 180–240ms 的 ease-out，不做回弹。' }
+    ]
+  },
+  {
+    id:'s5', ws:'设计', time:'10月18日', icon:'apps', title:'把设置图标放进矩阵',
+    msgs:[
+      { r:'u', t:'设置应该放在哪里？' },
+      { r:'k', t:'我的建议是做成矩阵里独立的一个节点，点开后进入 Android 设置；launcher 自己的系统抽屉只保留快捷开关。' }
+    ]
+  }
+];
+
+let agFilterWs = '全部';
+let agCurrent = null;
+let agToastTimer = null;
+
+function agEsc(s){
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+function agShowToast(msg){
+  agToast.textContent = msg;
+  agToast.classList.add('on');
+  clearTimeout(agToastTimer);
+  agToastTimer = setTimeout(() => agToast.classList.remove('on'), 1600);}
+
+function paintAgState(){
+  const ok = KEMON.connected();
+  agState.classList.toggle('ok', ok);
+  agState.querySelector('span').textContent =
+    ok ? ('在线 · ' + KEMON.cfg.model) : '本地智能体 · 模型未接入';
+  if (agEl.classList.contains('chat')){
+    agChatMeta.textContent = 'KEMON · ' + (ok ? KEMON.cfg.model : '本地');
+  }
+}
+
+function agRenderWs(){
+  const keys = ['全部', '桌面', '设计', '记忆'];
+  agWs.innerHTML = '';
+  keys.forEach(k => {
+    const n = k === '全部' ? AG_SESSIONS.length : AG_SESSIONS.filter(s => s.ws === k).length;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.dataset.ws = k;
+    b.className = k === agFilterWs ? 'on' : '';
+    b.innerHTML = agEsc(k) + '<small>' + n + '</small>';
+    b.addEventListener('click', () => {
+      agFilterWs = k;
+      agRenderWs();
+      agRenderSessions();
+    });
+    agWs.appendChild(b);
+  });
+}
+
+function agRenderSessions(){
+  const q = agSearch.value.trim().toLowerCase();
+  const list = AG_SESSIONS.filter(s =>
+    (agFilterWs === '全部' || s.ws === agFilterWs) &&
+    (!q || s.title.toLowerCase().includes(q))
+  );
+  agSessions.innerHTML = '';
+  list.forEach(s => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ag-session';
+    b.innerHTML =
+      '<span class="ag-session-ic">' + (AG_ICON[s.icon] || AG_ICON.chat) + '</span>' +
+      '<span class="ag-session-txt"><b>' + agEsc(s.title) + '</b>' +
+      '<small>' + agEsc(s.ws) + ' · ' + agEsc(s.time) + '</small></span>' +
+      '<svg class="ag-session-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>';
+    b.addEventListener('click', () => openAgChat(s));
+    agSessions.appendChild(b);
+  });
+  agEmpty.hidden = list.length > 0;
+}
+
+function agAddMsg(role, text){
+  const m = document.createElement('div');
+  m.className = 'ag-msg ' + role;
+  m.textContent = text;
+  agThread.appendChild(m);
+  return m;
+}
+
+function agAddConnectNote(){
+  const box = document.createElement('div');
+  box.className = 'ag-msg sys';
+  const span = document.createElement('span');
+  span.textContent = '模型未接入 · 消息只保存在当前会话';
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.textContent = '去接入';
+  btn.addEventListener('click', () => {
+    closeAg();
+    setTimeout(openSettings, 260);
+  });
+  box.append(span, btn);
+  agThread.appendChild(box);
+}
+
+function agRenderThread(){
+  agThread.innerHTML = '';
+  const day = document.createElement('div');
+  day.className = 'ag-day';
+  day.textContent = '今天';
+  agThread.appendChild(day);
+
+  if (!agCurrent) return;
+
+  if (!agCurrent.msgs.length){
+    agAddMsg('k', '我在。先把想法放进来——桌面、通知、设置的事，也可以从这里开始。');
+    const sugs = document.createElement('div');
+    sugs.className = 'ag-sugs';
+    const items = KEMON.connected()
+      ? [
+          { t:'整理今天的通知', say:'整理今天的通知' },
+          { t:'给桌面换个感觉', say:'给桌面换个感觉' },
+          { t:'你能做什么？', say:'你能做什么？' }
+        ]
+      : [
+          { t:'接入模型', act:'connect' },
+          { t:'整理今天的通知', say:'整理今天的通知' },
+          { t:'给桌面换个感觉', say:'给桌面换个感觉' }
+        ];
+    items.forEach(it => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'ag-sug';
+      b.textContent = it.t;
+      b.addEventListener('click', () => {
+        if (it.act === 'connect'){
+          closeAg();
+          setTimeout(openSettings, 260);
+          return;
+        }
+        agInput.value = it.say;
+        agAutoGrow();
+        agSendMessage();
+      });
+      sugs.appendChild(b);
+    });
+    agThread.appendChild(sugs);
+  }
+
+  agCurrent.msgs.forEach(m => agAddMsg(m.r, m.t));
+
+  if (agCurrent.needConnect && !KEMON.connected()) agAddConnectNote();
+}
+
+function agAutoGrow(){
+  agInput.style.height = 'auto';
+  agInput.style.height = Math.min(96, Math.max(32, agInput.scrollHeight)) + 'px';
+}
+
+function agScrollThread(smooth){
+  requestAnimationFrame(() => {
+    agThread.scrollTo({
+      top: agThread.scrollHeight,
+      behavior: smooth && !rm() ? 'smooth' : 'auto'
+    });
+  });
+}
+
+function openAgChat(session){
+  agCurrent = session || {
+    id: 'local-' + Date.now(),
+    title: '新的对话',
+    ws: agFilterWs === '全部' ? '桌面' : agFilterWs,
+    time: '刚刚',
+    icon: 'spark',
+    msgs: [],
+    isNew: true
+  };
+  agChatTitle.textContent = agCurrent.title;
+  agChatMeta.textContent = 'KEMON · ' + (KEMON.connected() ? KEMON.cfg.model : '本地');
+  agInput.value = '';
+  agSend.disabled = false;
+  agAutoGrow();
+  agRenderThread();
+  agEl.classList.add('chat');
+  agList.setAttribute('aria-hidden', 'true');
+  agChat.setAttribute('aria-hidden', 'false');
+  agScrollThread(false);
+}
+
+function showAgList(){
+  agEl.classList.remove('chat');
+  agList.setAttribute('aria-hidden', 'false');
+  agChat.setAttribute('aria-hidden', 'true');
+  agCurrent = null;
+}
+
+function agSendMessage(){
+  if (!agCurrent) return;
+  const text = agInput.value.trim();
+  if (!text || agSend.disabled) return;
+  const convo = agCurrent;
+
+  if (convo.isNew){
+    convo.isNew = false;
+    convo.title = text.length > 22 ? text.slice(0, 22) + '…' : text;
+    convo.time = '刚刚';
+    convo.msgs = [];
+    AG_SESSIONS.unshift(convo);
+    agChatTitle.textContent = convo.title;
+    agRenderWs();
+    agRenderSessions();
+  }
+
+  agInput.value = '';
+  agAutoGrow();
+  convo.msgs.push({ r:'u', t:text });
+  agRenderThread();
+  agScrollThread(true);
+
+  agSend.disabled = true;
+  const typing = document.createElement('div');
+  typing.className = 'ag-msg k ag-typing';
+  typing.innerHTML = '<i></i><i></i><i></i>';
+  agThread.appendChild(typing);
+  agScrollThread(true);
+
+  setTimeout(() => {
+    typing.remove();
+    const ok = KEMON.connected();
+    convo.msgs.push({
+      r:'k',
+      t: ok
+        ? '收到。原型里不会真的发起请求；接上 ' + KEMON.cfg.model + ' 之后，这条消息会走真实推理。'
+        : '我先记下了。模型还没接入，接入后才能真正回答你。'
+    });
+    if (!ok) convo.needConnect = true;
+    agSend.disabled = false;
+    if (agCurrent === convo && agEl.classList.contains('chat')){
+      agRenderThread();
+      agScrollThread(true);
+    }
+  }, 780);
+}
+
+function openAg(){
+  if (S.agOpen || droidEl.classList.contains('on')) return;
+  if (S.settingsOpen) closeSettings();
+  S.agOpen = true;
+  hideMenu();
+  agEl.classList.remove('dragging');
+  agEl.style.transform = '';
+  agEl.classList.add('on');
+  agScrim.classList.add('on');
+  agScrim.style.opacity = '';
+  agScrim.style.transition = '';
+  agScrim.style.pointerEvents = '';
+  agEl.setAttribute('aria-hidden', 'false');
+  paintAgState();
+  agRenderWs();
+  agRenderSessions();
+  updateEdgeZone();
+}
+
+function closeAg(){
+  if (!S.agOpen) return;
+  S.agOpen = false;
+  agEl.classList.remove('on', 'dragging');
+  agEl.style.transform = '';
+  agScrim.classList.remove('on');
+  agScrim.style.opacity = '';
+  agScrim.style.transition = '';
+  agScrim.style.pointerEvents = '';
+  agEl.setAttribute('aria-hidden', 'true');
+  agToast.classList.remove('on');
+  showAgList();
+  updateEdgeZone();
+}
+
+agClose.addEventListener('click', closeAg);
+agScrim.addEventListener('click', closeAg);
+agNew.addEventListener('click', () => openAgChat(null));
+agEmptyNew.addEventListener('click', () => {
+  agSearch.value = '';
+  agFilterWs = '全部';
+  agRenderWs();
+  agRenderSessions();
+  openAgChat(null);
+});
+agBack.addEventListener('click', showAgList);
+agChatMore.addEventListener('click', () => agShowToast('会话操作还没有展开'));
+agSearch.addEventListener('input', agRenderSessions);
+agAccount.addEventListener('click', () => {
+  closeAg();
+  setTimeout(openSettings, 240);
+});
+agEl.querySelectorAll('.ag-tool').forEach(b => {
+  b.addEventListener('click', () => agShowToast(b.dataset.ag + '还没有展开'));
+});
+agInput.addEventListener('input', agAutoGrow);
+agInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing){
+    e.preventDefault();
+    agSendMessage();
+  }
+});
+agForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  agSendMessage();
+});
+
+/* 左缘右滑拉出 */
+let agEdgeDrag = null;
+
+leftEdgeZone.addEventListener('pointerdown', (e) => {
+  if (S.agOpen || S.settingsOpen || droidEl.classList.contains('on')) return;
+  if (S.screen !== 'home' && S.screen !== 'matrix') return;
+  agEdgeDrag = { x: e.clientX, t: performance.now(), p: 0 };
+  agEl.classList.add('dragging');
+  agEl.style.transform = 'translateX(-100%)';
+  agScrim.style.transition = 'none';
+  agScrim.style.opacity = '0';
+  agScrim.style.pointerEvents = 'auto';
+  try { leftEdgeZone.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+leftEdgeZone.addEventListener('pointermove', (e) => {
+  if (!agEdgeDrag) return;
+  const w = agEl.offsetWidth || 360;
+  const p = clamp((e.clientX - agEdgeDrag.x) / w, 0, 1);
+  agEdgeDrag.p = p;
+  agEl.style.transform = `translateX(${(-(1 - p) * 100).toFixed(2)}%)`;
+  agScrim.style.opacity = (p * 0.85).toFixed(3);
+});
+
+function agEdgeEnd(){
+  if (!agEdgeDrag) return;
+  const { p, t } = agEdgeDrag;
+  const dt = Math.max(performance.now() - t, 1);
+  agEdgeDrag = null;
+  const velocity = p / dt;
+  agEl.classList.remove('dragging');
+  agEl.style.transform = '';
+  agScrim.style.transition = '';
+  agScrim.style.opacity = '';
+  agScrim.style.pointerEvents = '';
+  if (p > 0.28 || (p > 0.05 && velocity > 0.0012)) openAg();
+  else agScrim.classList.remove('on');
+}
+
+leftEdgeZone.addEventListener('pointerup', agEdgeEnd);
+leftEdgeZone.addEventListener('pointercancel', () => {
+  if (!agEdgeDrag) return;
+  agEdgeDrag = null;
+  agEl.classList.remove('dragging');
+  agEl.style.transform = '';
+  agScrim.style.transition = '';
+  agScrim.style.opacity = '';
+  agScrim.style.pointerEvents = '';
+});
+
+/* 顶部握把左滑关闭 */
+let agGrabDrag = null;
+
+agGrab.addEventListener('pointerdown', (e) => {
+  if (!S.agOpen) return;
+  agGrabDrag = { x: e.clientX, t: performance.now(), p: 0 };
+  agEl.classList.add('dragging');
+  agScrim.style.transition = 'none';
+  try { agGrab.setPointerCapture(e.pointerId); } catch (_) {}
+});
+
+agGrab.addEventListener('pointermove', (e) => {
+  if (!agGrabDrag) return;
+  const w = agEl.offsetWidth || 360;
+  const p = clamp((agGrabDrag.x - e.clientX) / w, 0, 1);
+  agGrabDrag.p = p;
+  agEl.style.transform = `translateX(${(-p * 100).toFixed(2)}%)`;
+  agScrim.style.opacity = (1 - p * 0.85).toFixed(3);
+});
+
+function agGrabEnd(){
+  if (!agGrabDrag) return;
+  const { p, t } = agGrabDrag;
+  const dt = Math.max(performance.now() - t, 1);
+  agGrabDrag = null;
+  const velocity = p / dt;
+  agEl.classList.remove('dragging');
+  agEl.style.transform = '';
+  agScrim.style.transition = '';
+  agScrim.style.opacity = '';
+  if (p > 0.28 || (p > 0.05 && velocity > 0.0012)) closeAg();
+}
+
+agGrab.addEventListener('pointerup', agGrabEnd);
+agGrab.addEventListener('pointercancel', () => {
+  if (!agGrabDrag) return;
+  agGrabDrag = null;
+  agEl.classList.remove('dragging');
+  agEl.style.transform = '';
+  agScrim.style.transition = '';
+  agScrim.style.opacity = '';
+});
+
+/* =========================================================
+   主屏输入：先把“模型没接”这件事说清楚
+   ========================================================= */
+inputDock.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const text = cmd.value.trim();
+  if (!text) return;
+  cmd.value = '';
+  cmd.blur();            // 手机端收起键盘，否则键盘会盖住矩阵、看起来像点不动
+  KEMON.read();
+  if (!KEMON.connected()){
+    promptSub.innerHTML = '模型未接入 · 右缘侧滑打开设置';
+    promptSub.classList.add('on');
+    setTimeout(openSettings, 420);
+    return;
+  }
+  promptSub.innerHTML = '已交给 <em>' + KEMON.cfg.model + '</em> · 推理通道待接入';
+  promptSub.classList.add('on');
+  setTimeout(() => openMatrix(), 420);
+});
+
+orbEl.addEventListener('click', flashOrb);
+function flashOrb(){
+  orbEl.style.transitionProperty = 'transform';
+  orbEl.style.transitionDuration = '180ms';
+  orbEl.style.transitionTimingFunction = EASE_OUT;
+  orbEl.style.transform = 'scale(1.18)';
+  setTimeout(() => {
+    orbEl.style.transitionDuration = '520ms';
+    orbEl.style.transitionTimingFunction = 'cubic-bezier(.34,1.56,.64,1)';
+    orbEl.style.transform = 'scale(1)';
+  }, 180);
+}
+
+/* =========================================================
+   初始化
+   ========================================================= */
+function init(){
+  buildNotices();
+  buildMatrix();
+  renderChips();
+
+  KEMON.load();
+  KEMON.fill();
+  applyTheme(themePref, false);
+  paintKemonStatus();
+  updateEdgeZone();
+
+  /* 测量基准卡片高度（避开 detail 卡自身的可变高度） */
+  const probe = noticeNodes.find(n => !n.el.classList.contains('is-detail'));
+  if (probe) BASE_CARD_H = probe.el.offsetHeight || 72;
+
+  toFlat();
+
+  noticeNodes.forEach(n => {
+    n.el.style.transitionDuration = '0ms';
+    n.el.style.transitionDelay = '0ms';
+    n.el.style.transform = 'translateY(34px) scale(.97)';
+    n.el.style.opacity = '0';
+  });
+
+  const H = cardH();
+  const pos = [];
+  let y = 0;
+  noticeNodes.forEach(() => { pos.push(y); y += H + 10; });
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      noticeNodes.forEach((n, i) => card(n, pos[i], 1, 1, 780, i * 34, EASE_SPRING));
+    });
+  });
+}
+
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  sizeBootFx();
+  computeScale();
+  /* 聚焦中的节点在缩放后要重新对齐中心 */
+  if (selIdx >= 0){
+    const t = panTargetFor(selIdx);
+    panTX = t.x; panTY = t.y;
+  }
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (S.mode === 'detail') relayoutDetail(S.detailIdx, Math.round((notifArea.clientHeight || 400) * 0.18));
+    else if (S.mode === 'expanded') toExpanded(S.group);
+    else if (S.mode === 'grouped') toGrouped();
+    else toFlat();
+    if (S.screen === 'matrix') renderMatrix(performance.now());
+  }, 120);
+});
+
+init();
+</script>
+</body>
+</html>

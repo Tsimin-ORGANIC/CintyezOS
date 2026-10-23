@@ -1,0 +1,11 @@
+.workbuddy/
+.DS_Store
+*.apk
+*.keystore
+
+android/.gradle/
+android/.idea/
+android/build/
+android/app/build/
+android/local.properties
+*.iml
