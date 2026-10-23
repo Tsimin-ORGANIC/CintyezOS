@@ -58,8 +58,9 @@ jobs:
       - name: Check APK
         run: |
           unzip -l CintyezOS.apk | grep -q 'assets/index.html'
-          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging CintyezOS.apk | head -n 4
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --print-certs CintyezOS.apk | head -n 3
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging CintyezOS.apk \
+            | grep -E "^package:|^sdkVersion:|^targetSdkVersion:|^application-label:|^launchable-activity:"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose --print-certs CintyezOS.apk | head -n 8
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -65,6 +65,9 @@ public class MainActivity extends Activity {
         root.addView(web, new FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.MATCH_PARENT,
             FrameLayout.LayoutParams.MATCH_PARENT));
+        web.addOnLayoutChangeListener((v, left, top, right, bottom,
+                                          oldLeft, oldTop, oldRight, oldBottom)
+            -> updateGestureExclusions());
 
         root.setOnApplyWindowInsetsListener((view, insets) -> {
             int top = 0;
