@@ -177,7 +177,7 @@ public class MainActivity extends Activity {
         int height = web.getHeight();
         if (width <= 0 || height <= 0) return;
 
-        int edge = Math.round(24 * getResources().getDisplayMetrics().density);
+        int edge = Math.round(30 * getResources().getDisplayMetrics().density);
         edge = Math.min(edge, width / 4);
         List<Rect> rects = new ArrayList<>(2);
         rects.add(new Rect(0, 0, edge, height));
