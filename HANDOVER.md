@@ -30,7 +30,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 
 - 状态机：`S = {screen:'lock'|'boot'|'home'|'matrix', mode, settingsOpen, agOpen, theme...}`；localStorage 键 `cintyez.theme`、`cintyez.kemon`；`KEMON.connected()`；对外接缝 `window.kemon = {config, chat, info, openSettings, version:'0.1'}`。API key 存 localStorage 是**有意的原型接缝**（用户不担心隐私，玩具项目）。
 - 信息层 `Info`：`source → normalize → group → summarize`，`Info.classify` 是分类接缝（现在是规则，之后可换模型）；锁屏计数和主屏摘要都从 `Info.last` 取。
-- 模型通道 `kemonChat(messages)`：有 `window.CintyezNative.chat` 时走原生 HTTP（APK），否则浏览器 `fetch` 直连；返回 `{content, model}`，错误抛 `Error`。原生回调入口是全局 `window.kemonChatReply(id, payload)`。
+- 模型通道 `kemonChat(messages)`：有 `window.CintyezNative.chat` 时走原生 HTTP（APK），否则浏览器 `fetch` 直连；返回 `{content, model}`，错误抛 `Error`。原生回调入口是全局 `window.kemonChatReply(id, payload)`。接口地址允许只填到 `/v1`，`chatEndpoint()` 会自动补 `/chat/completions`；HTTP 错误会优先取 JSON 里的 `error.message`，HTML 错误提示改地址。
 - 架构：右侧快捷抽屉 + "更多设置"跳 Android 系统设置锚点 `#droid`；左侧 Kemon 代理抽屉；设置矩阵里只有唯一一个真图标。
 - 桌面边缘热区：`#leftEdgeZone`（左缘右滑开 Kemon）与 `#edgeZone`（右缘左滑开设置）均为 `top:88px; bottom:108px; width:30px`（2026-10-23 由 22px 加宽）。`updateEdgeZone()` 只在 `home/matrix` 且没有抽屉/设置/彩蛋打开时给它们加 `.on`。宽度必须 ≤ Android 的 `setSystemGestureExclusionRects` 排除区，否则外侧会被系统返回手势截走。
 - 本段新增的 Android 钩子：
@@ -117,6 +117,12 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：接口地址自动补全 + 错误提示收敛
+
+- 用户填 `https://api.xiaomimimo.com/v1` 时 404：代码把 base 当完整端点 POST。实测 `/v1/chat/completions` 返回 401（路径正确），确认应自动补路径。
+- `chatEndpoint()`：去掉末尾 `/`，没以 `/chat/completions` 结尾就补上；原生和浏览器两条通道都走它。
+- 错误展示：HTML 响应不再把整页塞进设置，提示"接口地址可能不是 API 端点"；JSON 错误提取 `error.message`；`.set-actions` 允许换行、按钮不折行。
 
 ### 2026-10-24：修复 API Key 无法粘贴
 

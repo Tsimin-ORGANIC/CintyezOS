@@ -87,7 +87,7 @@ public class KemonBridge {
         InputStream in = code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream();
         String text = read(in);
         if (code < 200 || code >= 300) {
-            return error("HTTP " + code + " · " + cut(text, 240));
+            return error(describeError(code, text));
         }
 
         JSONObject root = new JSONObject(text);
@@ -113,6 +113,24 @@ public class KemonBridge {
             while ((line = reader.readLine()) != null) sb.append(line).append('\n');
         }
         return sb.toString();
+    }
+
+    private static String describeError(int code, String text) {
+        String body = text == null ? "" : text.trim();
+        if (body.isEmpty()) return "HTTP " + code;
+        if (body.startsWith("<")) {
+            return "HTTP " + code + " · 返回了 HTML，接口地址可能不是 API 端点（填到 /v1 即可）";
+        }
+        try {
+            JSONObject root = new JSONObject(body);
+            JSONObject err = root.optJSONObject("error");
+            String message = err == null ? "" : err.optString("message", "");
+            if (message.isEmpty()) message = root.optString("message", "");
+            if (!message.isEmpty()) return "HTTP " + code + " · " + cut(message, 160);
+        } catch (Exception ignored) {
+            // 不是 JSON，退回原文
+        }
+        return "HTTP " + code + " · " + cut(body, 160);
     }
 
     private static String error(String message) {

@@ -931,8 +931,9 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
   background:var(--fg);border:3px solid var(--bg);cursor:pointer;
 }
 
-.set-actions{display:flex;align-items:center;gap:10px;padding:12px 0 9px;}
+.set-actions{display:flex;align-items:center;gap:10px;padding:12px 0 9px;flex-wrap:wrap;}
 .btn-primary{
+  flex:0 0 auto;white-space:nowrap;
   height:34px;padding:0 15px;border-radius:999px;border:0;
   background:var(--fg);color:var(--bg);
   font:inherit;font-size:12px;font-weight:500;letter-spacing:.02em;
@@ -941,7 +942,7 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
 }
 .btn-primary:active{transform:scale(.96);}
 .btn-primary[disabled]{opacity:.45;pointer-events:none;}
-.set-hint{font-size:10px;line-height:1.5;color:var(--fg-2);letter-spacing:.02em;}
+.set-hint{flex:1;min-width:0;font-size:10px;line-height:1.5;color:var(--fg-2);letter-spacing:.02em;word-break:break-word;}
 .set-hint.ok{color:var(--flame-cu);}
 .set-hint.bad{color:var(--flame-ca);}
 .set-note{
@@ -1917,7 +1918,7 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
             <span class="set-hint" id="cfgHint">仅保存在本机</span>
           </div>
         </div>
-        <p class="set-note">按 OpenAI 兼容格式填写。APK 里由原生代发请求，浏览器里直连可能被 CORS 拦住。</p>
+        <p class="set-note">接口地址填到 /v1 即可，会自动补 /chat/completions。APK 里由原生代发请求，浏览器里直连可能被 CORS 拦住。</p>
       </section>
 
       <section class="set-sec">
@@ -4276,6 +4277,12 @@ window.kemonChatReply = function(id, payload){
   else waiter.reject(new Error(d.error || '模型请求失败'));
 };
 
+/* 允许只填到 /v1；已经是完整端点就原样使用。 */
+function chatEndpoint(base){
+  const u = String(base || '').trim().replace(/\/+$/, '');
+  return /\/chat\/completions$/.test(u) ? u : u + '/chat/completions';
+}
+
 async function kemonChat(messages){
   const c = { ...KEMON.cfg };
   if (!c.base || !c.model) throw new Error('KEMON_NOT_CONFIGURED');
@@ -4286,12 +4293,12 @@ async function kemonChat(messages){
   });
 
   if (window.CintyezNative && window.CintyezNative.chat){
-    return nativeChat(c.base, c.key, body);
+    return nativeChat(chatEndpoint(c.base), c.key, body);
   }
 
   let res;
   try {
-    res = await fetch(c.base, {
+    res = await fetch(chatEndpoint(c.base), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -4303,7 +4310,16 @@ async function kemonChat(messages){
     throw new Error('浏览器直连被 CORS 拦住，装 APK 后走原生通道');
   }
   const text = await res.text();
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' · ' + text.slice(0, 160));
+  if (!res.ok){
+    let detail = text.trim().startsWith('<')
+      ? '接口地址可能不是 API 端点（填到 /v1 即可）'
+      : text.slice(0, 160);
+    try {
+      const j = JSON.parse(text);
+      detail = (j.error && j.error.message) || j.message || detail;
+    } catch (_) {}
+    throw new Error('HTTP ' + res.status + ' · ' + detail);
+  }
   const data = JSON.parse(text);
   const content = data && data.choices && data.choices[0] && data.choices[0].message
     ? (data.choices[0].message.content || '') : '';
