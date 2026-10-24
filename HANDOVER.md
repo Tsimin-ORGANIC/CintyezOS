@@ -121,6 +121,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 
 ## 10. 最近改动记录
 
+### 2026-10-24：流式回复夹带 `null`
+
+- 症状：真机流式回答里成串出现 `null`，正常文字被包在中间。
+- 根因：Android `org.json` 的 `optString("content", "")` 遇到显式 `"content": null` 会返回字符串 `"null"`（`JSONObject.NULL.toString()` 的结果），而不是空串。MiMo 的推理流里每个 reasoning token 的 delta 都带 `content: null`，于是全部被当成正文拼接。
+- 修复：新增 `KemonBridge.textOf()`，只接受 `instanceof String` 的值；`deltaOf()` / `contentOf()` 都改用它。非流式路径同样的隐患一并修掉。
+- 验证：CI 编译通过；真机复测待用户。
+
 ### 2026-10-24：主屏输入接通 Kemon（流式）
 
 - 主屏提交不再直接进矩阵：`askHome()` 在首页原位流式作答，`#home.asking` 让大标题退到 0.2 透明度；短屏（`max-height:720px`）隐藏语音球并收紧答案高度，避免和输入栏打架。

@@ -165,10 +165,8 @@ public class KemonBridge {
             JSONArray choices = root.optJSONArray("choices");
             if (choices == null || choices.length() == 0) return "";
             JSONObject choice = choices.getJSONObject(0);
-            JSONObject delta = choice.optJSONObject("delta");
-            if (delta != null) return delta.optString("content", "");
-            JSONObject message = choice.optJSONObject("message");
-            return message == null ? "" : message.optString("content", "");
+            String content = textOf(choice.optJSONObject("delta"), "content");
+            return content.isEmpty() ? textOf(choice.optJSONObject("message"), "content") : content;
         } catch (Exception e) {
             return "";
         }
@@ -177,10 +175,16 @@ public class KemonBridge {
     private static String contentOf(JSONObject root) {
         JSONArray choices = root.optJSONArray("choices");
         if (choices == null || choices.length() == 0) return "";
-        JSONObject message = choices.optJSONObject(0);
-        if (message == null) return "";
-        JSONObject body = message.optJSONObject("message");
-        return body == null ? "" : body.optString("content", "");
+        JSONObject choice = choices.optJSONObject(0);
+        return choice == null ? "" : textOf(choice.optJSONObject("message"), "content");
+    }
+
+    /* optString 会把 JSON null 变成字符串 "null"（Android org.json 的实现），
+       所以显式 null 的 delta 会污染流式正文，这里只接受真正的字符串。 */
+    private static String textOf(JSONObject obj, String key) {
+        if (obj == null) return "";
+        Object value = obj.opt(key);
+        return value instanceof String ? (String) value : "";
     }
 
     private void emit(int id, String fn, String text) {
