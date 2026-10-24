@@ -55,7 +55,6 @@ public class MainActivity extends Activity {
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
             getWindow().setAttributes(attrs);
         }
-        hideSystemBars();
 
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(bg);
@@ -83,6 +82,7 @@ public class MainActivity extends Activity {
         });
 
         setContentView(root);
+        hideSystemBars();
 
         boolean night = (getResources().getConfiguration().uiMode
             & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
@@ -155,7 +155,9 @@ public class MainActivity extends Activity {
 
     private void hideSystemBars() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowInsetsController controller = getWindow().getInsetsController();
+            // decor 未创建时 Window.getInsetsController() 会 NPE（Android 11+ 都会）
+            WindowInsetsController controller =
+                getWindow().getDecorView().getWindowInsetsController();
             if (controller != null) {
                 controller.hide(WindowInsets.Type.statusBars()
                     | WindowInsets.Type.navigationBars());
@@ -194,7 +196,8 @@ public class MainActivity extends Activity {
     @Override
     public void onBackPressed() {
         if (imeVisible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            WindowInsetsController controller = getWindow().getInsetsController();
+            WindowInsetsController controller =
+                getWindow().getDecorView().getWindowInsetsController();
             if (controller != null) {
                 controller.hide(WindowInsets.Type.ime());
                 return;

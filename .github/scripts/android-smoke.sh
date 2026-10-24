@@ -25,3 +25,8 @@ echo "=== crash buffer ==="
 head -n 120 "$dir/crash.txt"
 echo "=== app logcat ==="
 grep -E "FATAL EXCEPTION|AndroidRuntime|CintyezOS|cintyez" -A 60 "$dir/logcat.txt" | head -n 300 || true
+
+if [ ! -s "$dir/pid.txt" ]; then
+  echo "::error::os.cintyez.launcher is not running after launch (API $api)"
+  exit 1
+fi
