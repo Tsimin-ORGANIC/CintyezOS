@@ -20,15 +20,17 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
   - `badb67f` — 初始提交：设计稿、Android 外壳与自动 APK 构建（26 个文件）
   - `9310c24` — CI SDK 修复（去掉 setup-android@v3）
   - `658b717` — 手势排除布局监听 + CI 检查
+  - `efcd9c3` — 交接文档 + 左右缘热区 22→30px（Android 排除区同步 24→30dp）
 - 所有提交都用逐条 `-c user.name=... -c user.email=...`（`312572725+Tsimin-ORGANIC@users.noreply.github.com`），**不要写全局 git config**。
 - GitHub 认证走 `git credential fill`（用户名 Tsimin-ORGANIC），本机没有 `gh` CLI。
 - **故意没推上去**：`.workbuddy/`（本地代理笔记）、`kemon-os.html`（旧草稿）。用户知情，想要的话可以加。
-- 最新 Release：v0.1.3（versionCode 3），`CintyezOS.apk` 约 1.0 MB，下载地址 `https://github.com/Tsimin-ORGANIC/CintyezOS/releases/latest`。README 已有"在 Android 上试"一节。
+- 最新 Release：v0.1.4（2026-10-23 热区加宽提交 `efcd9c3` 触发构建），`CintyezOS.apk` 约 1.0 MB，下载地址 `https://github.com/Tsimin-ORGANIC/CintyezOS/releases/latest`。README 已有"在 Android 上试"一节。注意每次构建签名都不同，升级前必须先卸载。
 
 ## 3. HTML 应用（kemon-os-v2.html）
 
 - 状态机：`S = {screen:'lock'|'boot'|'home'|'matrix', mode, settingsOpen, agOpen, theme...}`；localStorage 键 `cintyez.theme`、`cintyez.kemon`；`KEMON.connected()`；对外接缝 `window.kemon = {config, chat, openSettings, version:'0.1'}` 和 `kemonChat()`。API key 存 localStorage 是**有意的原型接缝**（用户不担心隐私，玩具项目）。
 - 架构：右侧快捷抽屉 + "更多设置"跳 Android 系统设置锚点 `#droid`；左侧 Kemon 代理抽屉；设置矩阵里只有唯一一个真图标。
+- 桌面边缘热区：`#leftEdgeZone`（左缘右滑开 Kemon）与 `#edgeZone`（右缘左滑开设置）均为 `top:88px; bottom:108px; width:30px`（2026-10-23 由 22px 加宽）。`updateEdgeZone()` 只在 `home/matrix` 且没有抽屉/设置/彩蛋打开时给它们加 `.on`。宽度必须 ≤ Android 的 `setSystemGestureExclusionRects` 排除区，否则外侧会被系统返回手势截走。
 - 本段新增的 Android 钩子：
   - **`window.kemonAndroidBack()`** — 返回键分层：`#droid` 面板 → Kemon 抽屉（聊天态先回列表）→ 设置 → 矩阵（先 hideMenu/取消选中再关矩阵）→ 锁屏 detail/expanded。全部返回 `false` 时交给系统（双击返回退出）。
   - **`systemDark()` / `resolveDark()`** — 主题初始化先读 URL 的 `systemDark=1/0`（安卓壳传入），再退回 `matchMedia`。URL 带 systemDark 时 media query 监听器不生效。
@@ -40,7 +42,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 - **MainActivity.java**：
   - 加载 `https://appassets.androidplatform.net/assets/index.html?systemDark=1/0`（WebViewAssetLoader `/assets/` 路径映射到 assets），`systemDark` 由 `UI_MODE_NIGHT_MASK` 决定。
   - 全屏沉浸：透明状态/导航栏，`LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES`，insets 监听器给 WebView 打刘海 top padding，并跟踪 `imeVisible`。
-  - **手势排除**：`updateGestureExclusions()` 给左右边缘各设 24dp 排除区（API 29+，上限宽度/4），保护抽屉滑动手势不被系统返回手势吃掉；由 `web.post(...)` + `addOnLayoutChangeListener` 双保险触发。
+  - **手势排除**：`updateGestureExclusions()` 给左右边缘各设 30dp 排除区（API 29+，上限宽度/4），保护抽屉滑动手势不被系统返回手势吃掉；由 `web.post(...)` + `addOnLayoutChangeListener` 双保险触发。**这个值要与 HTML 的 `#edgeZone` / `#leftEdgeZone` 宽度保持一致**（2026-10-23 一起从 22px/24dp 调到 30px/30dp）。
   - 返回键：先 `evaluateJavascript` 调 `window.kemonAndroidBack()`，返回 false 才双击 2200ms 内退出 + Toast"再按一次返回桌面"。
   - 外链跳系统浏览器（`Intent.ACTION_VIEW`）；console 日志进 Logcat，tag `CintyezOS`。
 - **app/build.gradle**：`syncWeb` Copy 任务把 `../kemon-os-v2.html` 复制成 `index.html` 到 `generated/webAssets`，挂到 `preBuild`；versionCode/Name 可用 `-P` 覆盖（CI 用 run_number）。
@@ -87,3 +89,13 @@ push 触发（paths: `kemon-os-v2.html`、`android/**`、workflow 本身）。�
 - 项目记忆：`C:\Users\User\.qoder-cn\projects\F--Project-CintyezOS\memory\`（项目愿景、ORGANIC 原始设定、愿景原始对话指针）。
 - 用户记忆：`C:\Users\User\.qoder-cn\memory\`（用户画像、单线执行偏好）。
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
+
+## 10. 最近改动记录
+
+### 2026-10-23：桌面左右侧滑热区加宽
+
+- 需求：用户觉得桌面左右侧滑出抽屉的判定范围太窄。
+- 改前备份：`kemon-os-v2.backup-2026-10-23.html`（与改动前内容一致；未纳入 git，需要存档时再决定是否提交）。
+- `kemon-os-v2.html`：`#leftEdgeZone`、`#edgeZone` 宽度 `22px → 30px`，垂直范围不变（`top:88px; bottom:108px`）。
+- `android/.../MainActivity.java`：`updateGestureExclusions()` 的左右排除区 `24dp → 30dp`，与热区宽度对齐，避免 APK 中外侧 6px 被系统返回手势吃掉。
+- 验证：仅 CSS 数值与一处原生常量改动，未跑自动化；浏览器/真机滑动效果待用户确认。
