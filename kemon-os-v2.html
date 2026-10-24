@@ -3753,23 +3753,44 @@ let panLimitX = 600, panLimitY = 800;
 let selIdx = -1;                  // 当前聚焦的 app（第一次点击进入，第二次点击才打开）
 let panTX = null, panTY = null;   // 视角平移目标（null = 无自动聚焦动画）
 
-/* 环容量按 6/11/14 的设计比例分摊 n 个应用；余量先补小数部分大的环，
-   三环都满后全部进最外环（周长最大，塞得下） */
-const APP_RINGS = RINGS.filter(r => !r.core);
-const RING_CAP = APP_RINGS.reduce((s, r) => s + r.n, 0);
-function ringCounts(n){
-  const counts = APP_RINGS.map(r => Math.floor(r.n * n / RING_CAP));
+/* 环梯子：基础三环（56/44/36），应用放不下就往外加环——半径 +64、尺寸递减到 26，
+   新环容量按周长算（间隔约 2.6 倍节点宽）。 */
+const RING_BASE = [
+  { r: 90,  size: 56, cap: 6 },
+  { r: 160, size: 44, cap: 11 },
+  { r: 228, size: 36, cap: 14 }
+];
+function ringPlan(n){
+  const rings = RING_BASE.map(r => ({ ...r }));
+  let cap = rings.reduce((s, r) => s + r.cap, 0);
+  while (cap < n){
+    const last = rings[rings.length - 1];
+    const r = last.r + 64;
+    const size = Math.max(26, last.size - 3);
+    const c = Math.max(8, Math.floor((2 * Math.PI * r) / (size * 2.6)));
+    rings.push({ r, size, cap: c });
+    cap += c;
+  }
+  return rings;
+}
+
+/* n 个应用按各环容量比例分摊（最大余数法），不满环时内环也不会挤爆 */
+function ringCounts(plan, n){
+  const total = plan.reduce((s, r) => s + r.cap, 0);
+  const counts = plan.map(r => Math.floor(r.cap * n / total));
   let rest = n - counts.reduce((s, c) => s + c, 0);
-  const byFrac = APP_RINGS.map((r, i) => i)
-    .sort((a, b) => (APP_RINGS[b].n * n / RING_CAP % 1) - (APP_RINGS[a].n * n / RING_CAP % 1));
+  const byFrac = plan.map((r, i) => i)
+    .sort((a, b) => (plan[b].cap * n / total % 1) - (plan[a].cap * n / total % 1));
   for (const i of byFrac){
     if (rest <= 0) break;
-    const add = Math.min(rest, APP_RINGS[i].n - counts[i]);
+    const add = Math.min(rest, plan[i].cap - counts[i]);
     if (add > 0){ counts[i] += add; rest -= add; }
   }
   counts[counts.length - 1] += rest;
   return counts;
 }
+
+let curPlan = RING_BASE.map(r => ({ ...r }));   // computeScale 用：最近一次布阵的环
 
 /* 图标：有设计符号的用符号；其余真实应用用名字首字 */
 function appIconHTML(app, svgSize, fontPx){
@@ -3782,10 +3803,14 @@ function buildMatrix(){
   mScene.innerHTML = '';
   appNodes.length = 0;
   const apps = realApps || rankedApps;
-  const counts = ringCounts(apps.length);
+  const plan = ringPlan(apps.length);
+  curPlan = plan;
+  const counts = ringCounts(plan, apps.length);
   let gIdx = 0;
+  let maxDelay = 0;
 
-  RINGS.forEach((ring, ri) => {
+  const rings = [RINGS[0], ...plan];
+  rings.forEach((ring, ri) => {
     if (ring.core){
       /* 中心永远是 Kemon，不是任何一个第三方应用 */
       const el = document.createElement('div');
@@ -3801,12 +3826,16 @@ function buildMatrix(){
       return;
     }
 
-    const n = counts[APP_RINGS.indexOf(ring)] || 0;
+    const n = counts[ri - 1] || 0;
+    /* 节点多的环压缩入场 stagger，别让外环等太久 */
+    const stag = Math.min(NODE_STAGGER, 540 / Math.max(1, n));
     for (let i = 0; i < n; i++){
       const app = apps[gIdx];
       if (!app) break;
 
       const a = (i / n) * Math.PI * 2 - Math.PI / 2 + ri * 0.22;
+      const delay = ri * RING_DELAY + i * stag;
+      if (delay > maxDelay) maxDelay = delay;
       const el = document.createElement('div');
       el.className = 'app';
       el.style.width = el.style.height = ring.size + 'px';
@@ -3819,18 +3848,21 @@ function buildMatrix(){
         x: Math.cos(a) * ring.r,
         y: Math.sin(a) * ring.r,
         size: ring.size,
-        delay: ri * RING_DELAY + i * NODE_STAGGER,
+        delay,
         sx: 0, sy: 0, f: 0
       });
       gIdx++;
     }
   });
 
+  /* 入场窗口随实际最大 delay 走（环多了不能按三环的旧常量截断） */
+  mEntryTotal = maxDelay + ENTRY_DUR + 80;
   computeScale();
 }
 
 function computeScale(){
-  const maxR = RINGS[RINGS.length - 1].r + RINGS[RINGS.length - 1].size / 2 + 6;
+  const last = curPlan[curPlan.length - 1];
+  const maxR = last.r + last.size / 2 + 6;
   const fitW = (innerWidth + 30) / 2 / maxR;
   const fitH = (innerHeight - 190) / 2 / maxR;
   mScale = clamp(Math.min(fitW, fitH), 0.66, 1.08);
@@ -3894,6 +3926,9 @@ function renderMatrix(now){
   const elapsed = now - mEntryStart;
   const cx = innerWidth / 2;
   const cy = innerHeight / 2;
+  /* 视口裁剪：屏幕外（留 120px 余量）的节点只藏不更新。
+     上百节点时每帧的样式写入从 O(全部) 降到 O(可见)，低端 WebView 才拖得动。 */
+  const vx0 = -120, vy0 = -120, vx1 = innerWidth + 120, vy1 = innerHeight + 120;
 
   let bestIdx = -1, bestF = -1;
 
@@ -3902,6 +3937,13 @@ function renderMatrix(now){
     const sx = cx + n.x * mScale + dragX;
     const sy = cy + n.y * mScale + dragY;
     n.sx = sx; n.sy = sy;
+
+    const off = sx < vx0 || sx > vx1 || sy < vy0 || sy > vy1;
+    if (off !== !!n.off){
+      n.el.style.visibility = off ? 'hidden' : 'visible';
+      n.off = off;
+    }
+    if (off) continue;
 
     const d = Math.hypot(sx - cx, sy - cy);
     const u = clamp(d / LENS_R, 0, 1);
@@ -3913,6 +3955,7 @@ function renderMatrix(now){
 
   for (let i = 0; i < appNodes.length; i++){
     const n = appNodes[i];
+    if (n.off) continue;
 
     let e = 1;
     if (!rm() && elapsed < n.delay + ENTRY_DUR){
@@ -3979,7 +4022,8 @@ function closeMatrix(){
 let mg = null;
 let mRaf = 0;
 let mDirty = true;                       // 需要重绘（选中态变化、开关矩阵等一次性状态）
-const M_ENTRY_TOTAL = 3 * RING_DELAY + 11 * NODE_STAGGER + ENTRY_DUR + 60;
+/* 入场动画总窗口：buildMatrix 按实际最大 delay 重算（环数可变，不能写死） */
+let mEntryTotal = 3 * RING_DELAY + 11 * NODE_STAGGER + ENTRY_DUR + 60;
 
 function markDirty(){ mDirty = true; }
 
@@ -4010,7 +4054,7 @@ function matrixFrame(now){
   }
 
   /* 静止时不再逐帧重写全部节点的 style：手机上空转会持续占主线程，点按会发虚 */
-  const entering = !rm() && (now - mEntryStart) < M_ENTRY_TOTAL;
+  const entering = !rm() && (now - mEntryStart) < mEntryTotal;
   if (mg || gliding || inertial || entering || mDirty){
     mScene.style.transform = `translate3d(${dragX.toFixed(2)}px,${dragY.toFixed(2)}px,0)`;
     renderMatrix(now);
