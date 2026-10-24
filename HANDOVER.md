@@ -33,6 +33,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 - 模型通道 `kemonChat(messages, opts)`：有原生桥时走 APK 内 HTTP，否则浏览器 `fetch` 直连；返回 `{content, model}`，错误抛 `Error`。接口地址允许只填到 `/v1`，`chatEndpoint()` 会自动补 `/chat/completions`；HTTP 错误优先取 JSON 的 `error.message`，HTML 错误提示改地址。
   - 非流式走 `CintyezNative.chat`，回调 `window.kemonChatReply(id, payload)`。
   - 流式（`opts.onChunk`）走 `CintyezNative.chatStream`，原生解析 SSE 后分批回调 `window.kemonChatChunk(id, text)`，结束 `kemonChatDone(id)`，失败 `kemonChatError(id, msg)`；JS 侧累积全文，Promise 在 done 时 resolve。原生每 40ms 合并一次 chunk；非 SSE 响应会自动退回整段 JSON。
+- 主屏问答：`inputDock` 提交后走 `askHome()`，结果写进 `homeAsk`（`#home.asking` 让大标题退场、≤720px 短屏隐藏语音球），复用 `kemonChat` 的 `onChunk` 逐字渲染。对话对象 `homeConvo` 同时 `unshift` 进 `AG_SESSIONS`；「在 Kemon 里继续」直接 `openAgChat(homeConvo)`，主屏和抽屉共用同一份 `msgs`，后续追问带完整历史。
 - 架构：右侧快捷抽屉 + "更多设置"跳 Android 系统设置锚点 `#droid`；左侧 Kemon 代理抽屉；设置矩阵里只有唯一一个真图标。
 - 桌面边缘热区：`#leftEdgeZone`（左缘右滑开 Kemon）与 `#edgeZone`（右缘左滑开设置）均为 `top:88px; bottom:108px; width:30px`（2026-10-23 由 22px 加宽）。`updateEdgeZone()` 只在 `home/matrix` 且没有抽屉/设置/彩蛋打开时给它们加 `.on`。宽度必须 ≤ Android 的 `setSystemGestureExclusionRects` 排除区，否则外侧会被系统返回手势截走。
 - 本段新增的 Android 钩子：
@@ -119,6 +120,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：主屏输入接通 Kemon（流式）
+
+- 主屏提交不再直接进矩阵：`askHome()` 在首页原位流式作答，`#home.asking` 让大标题退到 0.2 透明度；短屏（`max-height:720px`）隐藏语音球并收紧答案高度，避免和输入栏打架。
+- 对话写进 `AG_SESSIONS`，点「在 Kemon 里继续」打开同一个会话；主屏追问带完整历史。未接入时仍只提示去设置，不调模型。
+- 长答案在容器内滚动，`.ha-a.fade-top/.fade-bot` 用 32px mask 提示上下还有内容（18px 实测看不出来）。
+- 验证（浏览器 + 假桥，390×844 / 360×640 / 深色）：逐字渲染、`stream:true`、历史入参、抽屉续接、错误保留前文、未接入跳设置；无控制台报错。
 
 ### 2026-10-24：Kemon 对话改为真流式
 

@@ -394,7 +394,9 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
 .home-head{
   position:absolute;left:0;right:0;top:24vh;
   padding:0 30px;text-align:center;
+  transition:top .85s cubic-bezier(.22,1.06,.36,1);
 }
+#home.asking .home-head{top:12vh;}
 .prompt-line{
   font-size:clamp(24px,6.6vw,32px);
   font-weight:250;
@@ -419,6 +421,53 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
 }
 .prompt-sub.on{opacity:1;transform:none;}
 .prompt-sub em{font-style:normal;color:var(--fg);}
+.prompt-line{transition:opacity .9s ease;}
+#home.asking .prompt-line{opacity:.2;}
+#home.asking .prompt-sub:not(.on){opacity:0;}
+#home.asking .prompt-sub{transition-duration:320ms;}
+
+/* 主屏问答：标题退场，Kemon 在原位逐字作答 */
+.home-ask{display:none;max-width:320px;margin:26px auto 0;text-align:left;}
+#home.asking .home-ask{display:block;animation:askIn .62s cubic-bezier(.22,1.06,.36,1) both;}
+@keyframes askIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+.ha-q{
+  margin-bottom:14px;
+  font-family:var(--mono);font-size:9.5px;line-height:1.6;letter-spacing:.14em;
+  color:var(--fg-3);
+  overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;
+}
+.ha-a{
+  max-height:clamp(150px,31vh,300px);overflow-y:auto;
+  font-size:14.5px;line-height:1.92;color:var(--fg);
+  white-space:pre-wrap;word-break:break-word;
+  scrollbar-width:none;
+}
+.ha-a::-webkit-scrollbar{width:0;}
+.ha-a.fade-top{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 32px);mask-image:linear-gradient(to bottom,transparent 0,#000 32px);}
+.ha-a.fade-bot{-webkit-mask-image:linear-gradient(to top,transparent 0,#000 32px);mask-image:linear-gradient(to top,transparent 0,#000 32px);}
+.ha-a.fade-top.fade-bot{
+  -webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 32px,#000 calc(100% - 32px),transparent 100%);
+  mask-image:linear-gradient(to bottom,transparent 0,#000 32px,#000 calc(100% - 32px),transparent 100%);
+}
+.ha-a.streaming::after{
+  content:'';display:inline-block;width:6px;height:.92em;margin-left:3px;
+  background:var(--fg);vertical-align:-.14em;
+  animation:blink 1000ms steps(1) infinite;
+}
+.ha-a.bad{color:var(--fg-2);}
+.ha-more{
+  display:none;margin:18px auto 0;padding:6px 4px;
+  border:0;background:none;color:var(--fg-2);
+  font:inherit;font-size:11px;letter-spacing:.06em;cursor:pointer;
+}
+.home-ask.done .ha-more{display:block;}
+.ha-more:active{opacity:.55;}
+@media (max-height:720px){
+  #home.asking .home-head{top:10vh;}
+  #home.asking .home-ask{margin-top:18px;}
+  #home.asking .orb{opacity:0;pointer-events:none;transition:opacity .45s ease;}
+  .ha-a{max-height:26vh;}
+}
 
 .home-foot{
   position:absolute;left:0;right:0;bottom:calc(20px + env(safe-area-inset-bottom));
@@ -1705,6 +1754,11 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
     <div class="home-head">
       <div class="prompt-line" id="promptLine"></div>
       <div class="prompt-sub" id="promptSub"></div>
+      <div class="home-ask" id="homeAsk">
+        <div class="ha-q" id="homeAskQ"></div>
+        <div class="ha-a" id="homeAskA"></div>
+        <button class="ha-more" id="homeAskMore" type="button">在 Kemon 里继续 &#8594;</button>
+      </div>
     </div>
     <div class="home-foot">
       <div class="agent-chips" id="agentChips"></div>
@@ -2472,6 +2526,10 @@ const bctx        = bootFx.getContext('2d');
 const homeEl      = $('home');
 const promptLine  = $('promptLine');
 const promptSub   = $('promptSub');
+const homeAsk     = $('homeAsk');
+const homeAskQ    = $('homeAskQ');
+const homeAskA    = $('homeAskA');
+const homeAskMore = $('homeAskMore');
 const inputDock   = $('inputDock');
 const cmd         = $('cmd');
 const agentChips  = $('agentChips');
@@ -3513,6 +3571,7 @@ function typeHome(){
       S.typed = true;
       setTimeout(() => {
         promptLine.classList.add('done');
+        if (homeEl.classList.contains('asking')) return;
         promptSub.innerHTML = homeSub();
         promptSub.classList.add('on');
       }, 300);
@@ -5256,14 +5315,89 @@ agGrab.addEventListener('pointercancel', () => {
 });
 
 /* =========================================================
-   主屏输入：先把“模型没接”这件事说清楚
+   主屏输入：直接问 Kemon，答案在原位逐字长出来
    ========================================================= */
+let homeConvo = null;
+let homeBusy = false;
+
+function homeSession(first){
+  if (!homeConvo){
+    homeConvo = {
+      id: 'home-' + Date.now(),
+      title: first.length > 22 ? first.slice(0, 22) + '…' : first,
+      ws: '桌面',
+      time: '刚刚',
+      icon: 'spark',
+      msgs: []
+    };
+    AG_SESSIONS.unshift(homeConvo);
+    agRenderWs();
+    agRenderSessions();
+  }
+  return homeConvo;
+}
+
+async function askHome(text){
+  const convo = homeSession(text);
+  homeBusy = true;
+  homeEl.classList.add('asking');
+  promptSub.classList.remove('on');
+  homeAsk.classList.remove('done');
+  homeAskQ.textContent = '你 · ' + text;
+  homeAskA.className = 'ha-a streaming';
+  homeAskA.textContent = '';
+  homeAskA.scrollTop = 0;
+  paintAskFade();
+  convo.time = '刚刚';
+  convo.msgs.push({ r:'u', t:text });
+
+  let answer = '';
+  const history = convo.msgs.map(m => ({ role: m.r === 'u' ? 'user' : 'assistant', content: m.t }));
+  try {
+    const r = await kemonChat(
+      [{ role:'system', content: kemonSystemPrompt() }, ...history],
+      {
+        onChunk(t){
+          answer = t;
+          homeAskA.textContent = t;
+          homeAskA.scrollTop = homeAskA.scrollHeight;
+          paintAskFade();
+        }
+      }
+    );
+    answer = (r.content || answer).trim() || '（模型没有返回内容）';
+  } catch (e){
+    const msg = e && e.message ? e.message : e;
+    answer = (answer ? answer + '\n\n' : '') + '（中断：' + msg + '）';
+    homeAskA.classList.add('bad');
+  }
+
+  homeAskA.textContent = answer;
+  homeAskA.classList.remove('streaming');
+  homeAskA.scrollTop = homeAskA.scrollHeight;
+  paintAskFade();
+  homeAsk.classList.add('done');
+  convo.msgs.push({ r:'k', t:answer });
+  homeBusy = false;
+  if (convo === agCurrent && agEl.classList.contains('chat')){
+    agRenderThread();
+    agScrollThread(true);
+  }
+}
+
+function paintAskFade(){
+  const el = homeAskA;
+  const over = el.scrollHeight > el.clientHeight + 1;
+  el.classList.toggle('fade-top', over && el.scrollTop > 4);
+  el.classList.toggle('fade-bot', over && el.scrollTop + el.clientHeight < el.scrollHeight - 4);
+}
+homeAskA.addEventListener('scroll', paintAskFade);
+
 inputDock.addEventListener('submit', (e) => {
   e.preventDefault();
+  if (homeBusy) return;
   const text = cmd.value.trim();
   if (!text) return;
-  cmd.value = '';
-  cmd.blur();            // 手机端收起键盘，否则键盘会盖住矩阵、看起来像点不动
   KEMON.read();
   if (!KEMON.connected()){
     promptSub.innerHTML = '模型未接入 · 右缘侧滑打开设置';
@@ -5271,9 +5405,15 @@ inputDock.addEventListener('submit', (e) => {
     setTimeout(openSettings, 420);
     return;
   }
-  promptSub.innerHTML = '已交给 <em>' + KEMON.cfg.model + '</em> · 左缘侧滑继续对话';
-  promptSub.classList.add('on');
-  setTimeout(() => openMatrix(), 420);
+  cmd.value = '';
+  cmd.blur();            // 手机端收起键盘，否则键盘会盖住答案
+  askHome(text);
+});
+
+homeAskMore.addEventListener('click', () => {
+  if (!homeConvo) return;
+  openAg();
+  openAgChat(homeConvo);
 });
 
 orbEl.addEventListener('click', flashOrb);
