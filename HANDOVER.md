@@ -24,7 +24,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 - 所有提交都用逐条 `-c user.name=... -c user.email=...`（`312572725+Tsimin-ORGANIC@users.noreply.github.com`），**不要写全局 git config**。
 - GitHub 认证走 `git credential fill`（用户名 Tsimin-ORGANIC），本机没有 `gh` CLI。
 - **故意没推上去**：`.workbuddy/`（本地代理笔记）、`kemon-os.html`（旧草稿）。用户知情，想要的话可以加。
-- 最新 Release：v0.1.4（2026-10-23 热区加宽提交 `efcd9c3` 触发构建），`CintyezOS.apk` 约 1.0 MB，下载地址 `https://github.com/Tsimin-ORGANIC/CintyezOS/releases/latest`。README 已有"在 Android 上试"一节。注意每次构建签名都不同，升级前必须先卸载。
+- 最新 Release：v0.1.5（含启动闪退修复），`CintyezOS.apk` 约 1.0 MB，下载地址 `https://github.com/Tsimin-ORGANIC/CintyezOS/releases/latest`。README 已有"在 Android 上试"一节。注意每次构建签名都不同，升级前必须先卸载。
 
 ## 3. HTML 应用（kemon-os-v2.html）
 
@@ -61,16 +61,35 @@ push 触发（paths: `kemon-os-v2.html`、`android/**`、workflow 本身）。�
 
 **已知坑：调试签名是临时的**——每次 CI run 生成新 debug keystore（v0.1.2 证书 `33c930...` vs v0.1.3 `c5cafd...`），所以**升级 APK 必须先卸载旧版**。稳定方案（actions/cache 缓存 `~/.android/debug.keystore` 或用 GitHub secrets 存正式 keystore）讨论过但**没实现**。
 
-## 6. 遗留问题：Android 15 启动闪退（已暂停）
+### 模拟器冒烟（.github/workflows/android-smoke.yml）
 
-现象：安卓 15 真机安装成功，点开即闪退。已排查过的：
+- 手动触发（`workflow_dispatch`），或 push 到该 workflow 文件时触发；不随普通提交自动跑。
+- `build` 任务产出 APK → `smoke` 任务 matrix `[33, 35]`（x86_64，google_apis，pixel_6，KVM 已开）安装、启动、sleep 12s 后抓 `crash.txt` / `logcat.txt` / `exit-info.txt` / 截图，App 进程不存活时任务失败。
+- **注意**：`reactivecircus/android-emulator-runner` 会把 `script` 按行拆成独立 `sh -c` 执行，变量不跨行保留——逻辑都在 `.github/scripts/android-smoke.sh`，workflow 里只写一行 `bash .github/scripts/android-smoke.sh <api>`。
+- smoke 任务必须 `actions/checkout@v4`，否则找不到仓库里的脚本。
+- 一次完整跑约 5 分钟，两个 API 并行。
 
-- ✅ APK dex 里确认存在 `Landroidx/webkit/WebViewAssetLoader` 和 `Los/cintyez/launcher/MainActivity`（不是缺类）。
-- ✅ HTML 里只用了 localStorage，没有 alert/fetch 等风险 API。
-- ✅ 逐行读过 MainActivity.java 1–130 行，候选嫌疑：Android 15 edge-to-edge/predictive-back 行为变化（targetSdk 34）、`hideSystemBars()` 在 attach 前调用的时机问题、刘海 padding 的 insets 监听、Toast 时序、OEM 魔改。没有定论。
-- **下一步计划（未执行）**：在 GitHub Actions 里起 Android 15 模拟器（`reactivecircus/android-emulator-runner@v2`，api-level 35，google_apis x86_64），`am start` 后抓 `adb logcat` 的 FATAL EXCEPTION 和截图作为 artifact——日志一到手基本就能定位。
+## 6. Android 启动闪退：已修复（2026-10-24）
 
-本地没有 Android SDK/adb，也没有模拟器；所有验证都靠 CI。
+现象：真机（Android 15）安装成功，点开即闪退。CI 模拟器抓到的根因：
+
+```text
+FATAL EXCEPTION: main
+java.lang.NullPointerException: Attempt to invoke virtual method
+'android.view.WindowInsetsController ...DecorView.getWindowInsetsController()' on a null object reference
+  at os.cintyez.launcher.MainActivity.hideSystemBars(MainActivity.java:158)
+  at os.cintyez.launcher.MainActivity.onCreate(MainActivity.java:58)
+```
+
+`hideSystemBars()` 在 `onCreate` 里、`setContentView` 之前调用；此时 Window 的 DecorView 还没创建，`Window.getInsetsController()` 在 **Android 11+ 都会 NPE**（不只是 15；模拟器实测 API 33 同样崩）。之前没发现，是因为只在 Android 15 真机上试过。
+
+修复（提交 `8096f6d`）：
+
+- `hideSystemBars()` 移到 `setContentView(root)` 之后；
+- 取 controller 改为 `getWindow().getDecorView().getWindowInsetsController()` 并判空；
+- `onBackPressed` 里隐藏 IME 的同类调用一并改掉。
+
+验证：`android-smoke` workflow 在 API 33 / 35 模拟器安装并启动，进程存活、crash buffer 为空，Release 更新到 v0.1.5。
 
 ## 7. 本地测试手段
 
@@ -91,6 +110,12 @@ push 触发（paths: `kemon-os-v2.html`、`android/**`、workflow 本身）。�
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：修复启动闪退（Android 11+ 全中）
+
+- 用 CI 模拟器（API 33 / 35）复现并抓到 NPE：`onCreate` 里 `hideSystemBars()` 在 `setContentView` 前取 `WindowInsetsController`，DecorView 还是 null。
+- 修复见 §6，提交 `8096f6d`；新增 `.github/workflows/android-smoke.yml` + `.github/scripts/android-smoke.sh`。
+- 验证：API 33 / 35 进程存活、crash buffer 为空；Release 更新到 v0.1.5。
 
 ### 2026-10-23：桌面左右侧滑热区加宽
 
