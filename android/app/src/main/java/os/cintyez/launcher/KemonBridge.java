@@ -3,9 +3,14 @@ package os.cintyez.launcher;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.pm.ResolveInfo;
+import android.net.Uri;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -19,6 +24,8 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /* WebView 直连模型接口会被 CORS 挡；这里用原生 HTTP 代发，JS 通过 CintyezNative 调用。 */
 public class KemonBridge {
@@ -60,6 +67,52 @@ public class KemonBridge {
         } catch (Exception e) {
             return "";
         }
+    }
+
+    /* 桌面可启动应用清单。launcher intent 在 Android 11+ 对所有应用自动可见，
+       不需要 QUERY_ALL_PACKAGES；真机发现漏应用再补权限。 */
+    @JavascriptInterface
+    public String apps() {
+        JSONArray out = new JSONArray();
+        try {
+            Intent probe = new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_LAUNCHER);
+            LinkedHashMap<String, String> seen = new LinkedHashMap<>();
+            for (ResolveInfo ri : web.getContext().getPackageManager()
+                     .queryIntentActivities(probe, 0)) {
+                if (ri.activityInfo == null) continue;
+                String pkg = ri.activityInfo.packageName;
+                if (pkg == null || pkg.equals(web.getContext().getPackageName())) continue;
+                CharSequence label = ri.loadLabel(web.getContext().getPackageManager());
+                seen.put(pkg, label == null ? pkg : label.toString());
+            }
+            for (Map.Entry<String, String> e : seen.entrySet()) {
+                out.put(new JSONObject()
+                    .put("label", e.getValue())
+                    .put("pkg", e.getKey()));
+            }
+        } catch (Exception ignored) {
+            // 拉不到就回空数组，前端按无匹配处理
+        }
+        return out.toString();
+    }
+
+    /* 跳系统「应用信息」页（每应用的权限管理入口）。 */
+    @JavascriptInterface
+    public void openAppDetails(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return;
+        web.post(() -> {
+            try {
+                Intent intent = new Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:" + pkg));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                web.getContext().startActivity(intent);
+            } catch (Exception e) {
+                Toast.makeText(web.getContext(), "打不开应用信息",
+                    Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     void shutdown() {

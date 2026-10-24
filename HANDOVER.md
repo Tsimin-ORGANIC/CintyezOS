@@ -56,6 +56,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
   - 外链跳系统浏览器（`Intent.ACTION_VIEW`）；console 日志进 Logcat，tag `CintyezOS`。
 - **KemonBridge.java**：`@JavascriptInterface` 暴露为 `window.CintyezNative`，单线程池里用 `HttpURLConnection` POST OpenAI 兼容接口（连接 15s / 读 90s）。`chat` 返回整段 `{ok, content, model}`；`chatStream` 读 `text/event-stream`，按 `delta.content` 抽取文本，40ms 合并后 `web.post` 回调 JS；非 SSE 自动退回整段解析。`onDestroy` 里 `shutdown()`。
   - `clipboard()`：读系统剪贴板返回字符串（失败返回空串）。设置里的「粘贴」按钮用它兜底——部分 ROM 的安全键盘会屏蔽密码框的长按粘贴。
+  - `apps()` / `openAppDetails(pkg)`（2026-10-24）：返回可启动应用清单 `[{label,pkg}]`（launcher intent 查询，Android 11+ 自动可见，**没加** QUERY_ALL_PACKAGES）；跳系统「应用信息」页。见 §10。
 - 长按/选中：**不要**再给 WebView 调 `setLongClickable(false)`（会连输入框的粘贴菜单一起禁掉）。选择范围由 CSS 控制：`body` 禁止选中，`input,textarea` 允许。
 - **app/build.gradle**：`syncWeb` Copy 任务把 `../kemon-os-v2.html` 复制成 `index.html` 到 `generated/webAssets`，挂到 `preBuild`；versionCode/Name 可用 `-P` 覆盖（CI 用 run_number）。
 - Manifest：INTERNET、singleTask、竖屏、adjustResize、`enableOnBackInvokedCallback=false`。
@@ -124,6 +125,14 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：矩阵接真实应用（PackageManager）
+
+- 新桥方法：`CintyezNative.apps()` 同步返回可启动应用清单 `[{label,pkg}]`（`queryIntentActivities` launcher intent，Android 11+ 自动可见，**未加** QUERY_ALL_PACKAGES，真机漏应用再补）；`openAppDetails(pkg)` `web.post` 回主线程跳系统「应用信息」页（每应用的权限管理入口），失败 Toast。
+- HTML 数据层新增 `APP_PKG` 别名表（29 个包名，Linear/Vercel 无官方安卓应用不列）+ `matchRealApps()`：别名表按包名精确命中 → 归一化 label 精确 → 英文短名唯一「包含」命中（歧义弃权）；「设置」不参与；无桥（浏览器）直接跳过，行为零变化。`init()` 里在 `buildMatrix()` 前调用。
+- UI：匹配节点加低饱和小圆点角标 `.app-real`（12% 尺寸，`pointer-events:none` 不影响点击）；矩阵副标题变为「按重要度推算 · 31 个节点 · N 个真实应用」（`matrixSub()` 统一出处）；`launchApp()` 对匹配节点播 700ms 动效（副标题「真实应用 · 打开应用信息」）后跳应用信息页，未匹配维持 1.25s 假启动，「设置」仍开内置 `#droid`。
+- 验证（浏览器 + 假桥，`test-real-apps.js` 27/27）：别名/label 精确/双命中/歧义弃权/未安装/设置不参与；角标与副标题计数；真实两击路径（聚焦→再点打开）`openAppDetails` 收到正确包名且 overlay 收起；未匹配假启动自收、不触发跳转；无桥回归（副标题/假启动文案不变）；`apps()` 返回非法 JSON 或抛异常均按无匹配容错。`node --check` 3 个脚本块通过；`check-home-regression` 正常；角标可见性经截图确认（不突兀）。**注意**：假桥 `apps()` 必须返回字符串（`JSON.stringify`），返回数组字面量会被 `JSON.parse` 当对象解析失败——这是测试 harness 的坑，不是产品代码的。
+- **未验证**：Java 侧本机无 SDK，编译正确性靠 CI `assembleDebug`；真机 PackageManager 返回、跳转、别名表对错待真机反馈（错了改一行）。装新 APK 前先卸旧版（debug 签名又变）。
 
 ### 2026-10-24：对话持久化（cintyez.chats）
 

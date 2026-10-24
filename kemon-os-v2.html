@@ -706,6 +706,15 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
 .app .glyph{width:48%;height:48%;opacity:.96;}
 .app.hover:not(.sel){outline:1px solid var(--fg-3);outline-offset:3px;}
 
+/* 真实应用角标：APK 里匹配到已安装应用的节点 */
+.app-real{
+  position:absolute;right:7%;top:7%;width:12%;height:12%;
+  border-radius:50%;
+  background:var(--fg-2);
+  box-shadow:0 0 0 2px var(--node-bg);
+  opacity:.92;pointer-events:none;
+}
+
 /* 聚焦环：只切 class，不做逐帧写入；只动 transform / opacity */
 .app::before{
   content:'';position:absolute;inset:-10px;border-radius:50%;
@@ -1854,7 +1863,7 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
     <div class="launch-inner">
       <div class="launch-icon" id="launchIcon"></div>
       <div class="launch-name" id="launchName"></div>
-      <div class="launch-sub">启动中 · 由 KEMON 托管</div>
+      <div class="launch-sub" id="launchSub">启动中 · 由 KEMON 托管</div>
     </div>
   </div>
 
@@ -2367,6 +2376,63 @@ const mockApps = [
   { name:'设置',    id:'settings',    iconColor:'#3DDC84' }
 ];
 
+/* 真实应用包名别名：APK 里先用它精确命中，装的不是这个发行版时靠 label 兜底 */
+const APP_PKG = {
+  bilibili:'tv.danmaku.bili', zhihu:'com.zhihu.android', wechat:'com.tencent.mm',
+  taobao:'com.taobao.taobao', jd:'com.jingdong.app.mall', douyin:'com.ss.android.ugc.aweme',
+  kuaishou:'com.smile.gifmaker', xiaohongshu:'com.xingin.xhs', netease:'com.netease.cloudmusic',
+  qq:'com.tencent.mobileqq', weibo:'com.sina.weibo', douban:'com.douban.frodo',
+  meituan:'com.sankuai.meituan', eleme:'me.ele', pdd:'com.xunmeng.pinduoduo',
+  amap:'com.autonavi.minimap', baidu:'com.baidu.searchbox', alipay:'com.eg.android.AlipayGphone',
+  xianyu:'com.taobao.idlefish', juejin:'com.juejin.android', github:'com.github.android',
+  figma:'com.figma.mirror', notion:'notion.id', spotify:'com.spotify.music',
+  steam:'com.valvesoftware.android.steam.community', telegram:'org.telegram.messenger',
+  discord:'com.discord', obsidian:'md.obsidian'
+  /* Linear / Vercel 无官方安卓应用；设置走内置面板，不参与匹配 */
+};
+let realAppCount = 0;
+
+function normLabel(s){ return String(s || '').toLowerCase().replace(/\s+/g, ''); }
+
+/* 拉可启动应用清单给矩阵节点挂 pkg（点击跳系统应用信息页）。
+   先按别名表命中包名，再按归一化 label 精确匹配；无桥（浏览器）直接跳过。 */
+function matchRealApps(){
+  realAppCount = 0;
+  mockApps.forEach(a => { a.pkg = ''; });
+  if (!window.CintyezNative || !window.CintyezNative.apps) return;
+  let list;
+  try { list = JSON.parse(window.CintyezNative.apps() || '[]'); } catch (_) { return; }
+  if (!Array.isArray(list)) return;
+
+  const byPkg = new Map();
+  const labels = [];
+  list.forEach(it => {
+    if (!it || typeof it.pkg !== 'string' || !it.pkg) return;
+    byPkg.set(it.pkg, true);
+    if (typeof it.label === 'string' && it.label) labels.push({ key: normLabel(it.label), pkg: it.pkg });
+  });
+
+  mockApps.forEach(app => {
+    if (app.id === 'settings') return;
+    let pkg = (APP_PKG[app.id] && byPkg.has(APP_PKG[app.id])) ? APP_PKG[app.id] : '';
+    if (!pkg){
+      const exact = labels.filter(l => l.key === normLabel(app.name));
+      if (exact.length === 1) pkg = exact[0].pkg;
+    }
+    if (!pkg && /^[a-z0-9 .&-]{4,}$/i.test(app.name)){
+      /* 英文短名（GitHub / Spotify…）允许 label 包含命中，唯一才算，避免抢错 */
+      const key = normLabel(app.name);
+      const loose = labels.filter(l => l.key.includes(key));
+      if (loose.length === 1) pkg = loose[0].pkg;
+    }
+    if (pkg){ app.pkg = pkg; realAppCount++; }
+  });
+}
+
+function matrixSub(){
+  return '按重要度推算 · 31 个节点' + (realAppCount ? ` · ${realAppCount} 个真实应用` : '');
+}
+
 /* 单色能力符号：统一 24 栅格、1.7 线宽、圆头。品牌色只留在极淡的底色里。 */
 const ICONS = {
   bilibili:`<rect x="3.2" y="7.2" width="17.6" height="13.1" rx="3.2"/><path d="m7.8 3.2 3.4 4M16.2 3.2l-3.4 4"/>`,
@@ -2596,6 +2662,7 @@ const menuScrim   = $('menuScrim');
 const launchEl    = $('launch');
 const launchIcon  = $('launchIcon');
 const launchName  = $('launchName');
+const launchSub   = $('launchSub');
 const setBtn      = $('setBtn');
 const homeKemon   = $('homeKemon');
 const edgeZone    = $('edgeZone');
@@ -3713,7 +3780,7 @@ function buildMatrix(){
       el.className = 'app';
       el.style.width = el.style.height = ring.size + 'px';
       el.style.setProperty('--tint', app.iconColor);
-      el.innerHTML = iconSVG(app.id);
+      el.innerHTML = iconSVG(app.id) + (app.pkg ? '<span class="app-real"></span>' : '');
 
       mScene.appendChild(el);
       appNodes.push({
@@ -3759,7 +3826,7 @@ function selectApp(i){
 
   if (selIdx < 0){
     panTX = null; panTY = null;
-    mSub.textContent = '按重要度推算 · 31 个节点';
+    mSub.textContent = matrixSub();
     mSub.classList.add('on');
     return;
   }
@@ -3848,7 +3915,7 @@ function openMatrix(instant){
   setBtn.classList.add('show');
   updateEdgeZone();
 
-  mSub.textContent = '按重要度推算 · 31 个节点';
+  mSub.textContent = matrixSub();
   mSub.classList.add('on');
 
   computeScale();
@@ -4130,7 +4197,7 @@ let launchTimer = null;
 
 function launchApp(app){
   clearSelect();
-  mSub.textContent = '按重要度推算 · 31 个节点';
+  mSub.textContent = matrixSub();
   const dark = document.documentElement.dataset.theme === 'dark';
   launchEl.style.setProperty('--launch-tint', rgba(app.iconColor, dark ? .16 : .1));
   launchIcon.style.setProperty('--tint', app.iconColor);
@@ -4145,6 +4212,16 @@ function launchApp(app){
     }, 700);
     return;
   }
+  if (app.pkg && window.CintyezNative && window.CintyezNative.openAppDetails){
+    /* 匹配到真实安装应用：播完动效跳系统「应用信息」页（权限管理入口） */
+    launchSub.textContent = '真实应用 · 打开应用信息';
+    launchTimer = setTimeout(() => {
+      try { window.CintyezNative.openAppDetails(app.pkg); } catch (_) {}
+      launchEl.classList.remove('on');
+    }, 700);
+    return;
+  }
+  launchSub.textContent = '启动中 · 由 KEMON 托管';
   launchTimer = setTimeout(() => launchEl.classList.remove('on'), 1250);
 }
 
@@ -5870,7 +5947,9 @@ function flashOrb(){
 async function init(){
   console.log('CintyezOS · native bridge ' + (window.CintyezNative ? 'ready' : 'absent'));
   await buildNotices();
+  matchRealApps();
   buildMatrix();
+  mSub.textContent = matrixSub();
   renderChips();
 
   KEMON.load();
