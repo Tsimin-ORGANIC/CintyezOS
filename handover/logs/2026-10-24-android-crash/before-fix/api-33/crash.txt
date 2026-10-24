@@ -1,0 +1,26 @@
+--------- beginning of crash
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: FATAL EXCEPTION: main
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: Process: os.cintyez.launcher, PID: 3235
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: java.lang.RuntimeException: Unable to start activity ComponentInfo{os.cintyez.launcher/os.cintyez.launcher.MainActivity}: java.lang.NullPointerException: Attempt to invoke virtual method 'android.view.WindowInsetsController com.android.internal.policy.DecorView.getWindowInsetsController()' on a null object reference
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3645)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.ActivityThread.handleLaunchActivity(ActivityThread.java:3782)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.servertransaction.LaunchActivityItem.execute(LaunchActivityItem.java:101)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.servertransaction.TransactionExecutor.executeCallbacks(TransactionExecutor.java:138)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.servertransaction.TransactionExecutor.execute(TransactionExecutor.java:95)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.ActivityThread$H.handleMessage(ActivityThread.java:2307)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.os.Handler.dispatchMessage(Handler.java:106)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.os.Looper.loopOnce(Looper.java:201)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.os.Looper.loop(Looper.java:288)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.ActivityThread.main(ActivityThread.java:7924)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at java.lang.reflect.Method.invoke(Native Method)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at com.android.internal.os.RuntimeInit$MethodAndArgsCaller.run(RuntimeInit.java:548)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at com.android.internal.os.ZygoteInit.main(ZygoteInit.java:936)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: Caused by: java.lang.NullPointerException: Attempt to invoke virtual method 'android.view.WindowInsetsController com.android.internal.policy.DecorView.getWindowInsetsController()' on a null object reference
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at com.android.internal.policy.PhoneWindow.getInsetsController(PhoneWindow.java:3959)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at os.cintyez.launcher.MainActivity.hideSystemBars(MainActivity.java:158)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at os.cintyez.launcher.MainActivity.onCreate(MainActivity.java:58)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.Activity.performCreate(Activity.java:8342)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.Activity.performCreate(Activity.java:8321)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.Instrumentation.callActivityOnCreate(Instrumentation.java:1417)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	at android.app.ActivityThread.performLaunchActivity(ActivityThread.java:3626)
+10-24 03:13:16.048  3235  3235 E AndroidRuntime: 	... 12 more

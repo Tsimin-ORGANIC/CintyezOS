@@ -242,6 +242,7 @@ Android 能力模块（单独写，但先放在同一个 APK 里）
 kemon-os-v2.html      唯一前端（浏览器 / Android WebView 共用，单文件，无依赖）
 kemon-os.html         v1 存档
 .workbuddy/memory/    迭代笔记（手势、滚动、绘制层级等踩坑记录）
+handover/             交接包：故障日志、技能快照、记忆、自进化建议
 README.md
 ```
 

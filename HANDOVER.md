@@ -105,8 +105,10 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 
 ## 9. 记忆与原始资料
 
-- 项目记忆：`C:\Users\User\.qoder-cn\projects\F--Project-CintyezOS\memory\`（项目愿景、ORGANIC 原始设定、愿景原始对话指针）。
-- 用户记忆：`C:\Users\User\.qoder-cn\memory\`（用户画像、单线执行偏好）。
+**可搬运交接包在 `handover/`**：日志证据、技能原文（15 个 SKILL.md）、记忆快照、自进化建议与 harness 迁移清单。换平台先读 `handover/README.md`。
+
+- 项目记忆：`C:\Users\User\.qoder-cn\projects\F--Project-CintyezOS\memory\`（项目愿景、ORGANIC 原始设定、愿景原始对话指针），快照见 `handover/memory/project/`。
+- 用户记忆：`C:\Users\User\.qoder-cn\memory\`（用户画像、单线执行偏好），快照见 `handover/memory/user/`。
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录

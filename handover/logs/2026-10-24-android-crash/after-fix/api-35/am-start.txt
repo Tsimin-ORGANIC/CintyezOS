@@ -1,0 +1,7 @@
+Starting: Intent { cmp=os.cintyez.launcher/.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: os.cintyez.launcher/.MainActivity
+TotalTime: 2497
+WaitTime: 2530
+Complete

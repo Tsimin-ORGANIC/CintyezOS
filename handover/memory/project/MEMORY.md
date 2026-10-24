@@ -1,0 +1,3 @@
+- [项目愿景](project-vision.md) — CintyezOS 四大支柱（工具/观察学习/信息主权/新桌面），以及设计稿与原型的完成度边界
+- [ORGANIC 原始设定](organic-reference.md) — Kemon Cintyez 的命名、人格与焰色锚点、本地优先架构的出处
+- [愿景原始对话](vision-source-conversation.md) — DeepSeek 导出 F:\DeepChat\ldahgrk5rm6fx6vf9o.md，项目构想的原始出处

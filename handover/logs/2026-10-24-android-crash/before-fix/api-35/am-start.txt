@@ -1,0 +1,6 @@
+Starting: Intent { cmp=os.cintyez.launcher/.MainActivity }
+Status: ok
+LaunchState: UNKNOWN (0)
+Activity: os.cintyez.launcher/.MainActivity
+WaitTime: 1577
+Complete

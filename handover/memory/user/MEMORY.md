@@ -1,0 +1,2 @@
+- [用户画像](user-profile.md) — 宜昌高中生、非程序员 vibe coder，靠 AI 写代码，用视觉原型定方向
+- [单线执行偏好](feedback-single-thread.md) — 不搞多线虚拟团队；默认自己顺序做完，独立核对可派子进程
