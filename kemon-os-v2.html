@@ -2306,22 +2306,23 @@ function iconSVG(id, size){
   return `<svg class="glyph" viewBox="0 0 24 24" width="${size || 18}" height="${size || 18}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[id] || ICONS.dot}</svg>`;
 }
 
+/* 模拟数据源。只给原始字段——分组不是手填的，由下面的 Info 层算出来。 */
 const mockNotices = [
-  { app:'微信',  color:'#07C160', time:'刚刚',  title:'林工',   text:'架构评审提前到 15:00，你能到吗？', group:'urgent' },
-  { app:'邮件',  color:'#0A84FF', time:'2 分钟', title:'财务 · 季度预算', text:'审批单待你签字，今日截止', group:'urgent' },
-  { app:'日历',  color:'#FF453A', time:'5 分钟', title:'架构评审',  text:'15:00 · 会议室 A · 5 人已确认', group:'urgent' },
+  { app:'微信',  color:'#07C160', time:'刚刚',  title:'林工',   text:'架构评审提前到 15:00，你能到吗？' },
+  { app:'邮件',  color:'#0A84FF', time:'2 分钟', title:'财务 · 季度预算', text:'审批单待你签字，今日截止' },
+  { app:'日历',  color:'#FF453A', time:'5 分钟', title:'架构评审',  text:'15:00 · 会议室 A · 5 人已确认' },
 
-  { app:'微信',  color:'#07C160', time:'12 分钟', title:'妈妈',   text:'周末回家吃饭吗', group:'people' },
-  { app:'飞书',  color:'#3370FF', time:'28 分钟', title:'陈夏',   text:'文档已更新，麻烦看下第三段', group:'people' },
-  { app:'iMessage', color:'#30D158', time:'1 小时', title:'Alex', text:'那版 demo 我看过了，节奏很棒', group:'people' },
+  { app:'微信',  color:'#07C160', time:'12 分钟', title:'妈妈',   text:'周末回家吃饭吗' },
+  { app:'飞书',  color:'#3370FF', time:'28 分钟', title:'陈夏',   text:'文档已更新，麻烦看下第三段' },
+  { app:'iMessage', color:'#30D158', time:'1 小时', title:'Alex', text:'那版 demo 我看过了，节奏很棒' },
 
-  { app:'提醒',  color:'#FF9F0A', time:'6 分钟', title:'今天待办',  text:'提交 v2 交互稿 · 还有 2 项', group:'task' },
-  { app:'钉钉',  color:'#3296FA', time:'20 分钟', title:'审批中心',  text:'你有 2 条待审批', group:'task' },
-  { app:'备忘录', color:'#F2C94C', time:'40 分钟', title:'自己',    text:'记得问接口超时的重试策略', group:'task' },
+  { app:'提醒',  color:'#FF9F0A', time:'6 分钟', title:'今天待办',  text:'提交 v2 交互稿 · 还有 2 项' },
+  { app:'钉钉',  color:'#3296FA', time:'20 分钟', title:'审批中心',  text:'你有 2 条待审批' },
+  { app:'备忘录', color:'#F2C94C', time:'40 分钟', title:'自己',    text:'记得问接口超时的重试策略' },
 
-  { app:'GitHub', color:'#8E7CFF', time:'9 分钟', title:'kemon-os', text:'3 个 PR 等待 review', group:'feed' },
-  { app:'B站',   color:'#FB7299', time:'2 小时', title:'关注的 UP 主', text:'更新了：交互原型怎么做到 60fps', group:'feed' },
-  { app:'少数派', color:'#FF375F', time:'3 小时', title:'今日推荐',   text:'5 篇文章 · 约 24 分钟读完', group:'feed' }
+  { app:'GitHub', color:'#8E7CFF', time:'9 分钟', title:'kemon-os', text:'3 个 PR 等待 review' },
+  { app:'B站',   color:'#FB7299', time:'2 小时', title:'关注的 UP 主', text:'更新了：交互原型怎么做到 60fps' },
+  { app:'少数派', color:'#FF375F', time:'3 小时', title:'今日推荐',   text:'5 篇文章 · 约 24 分钟读完' }
 ];
 
 const GROUP_META = {
@@ -2331,6 +2332,69 @@ const GROUP_META = {
   feed:   { label:'资讯', color:'var(--flame-k)' }
 };
 const GROUP_ORDER = ['urgent', 'people', 'task', 'feed'];
+
+/* =========================================================
+   信息层：source → normalize → group → summarize
+   界面只认 DigestItem（app / color / time / title / text / group）
+   ========================================================= */
+const TIME_RE = /(\d{1,2}[:：]\d{2})/;
+const URGENT_APPS  = ['日历'];
+const IM_APPS      = ['微信', 'iMessage', '飞书', 'QQ', 'Telegram'];
+const TASK_APPS    = ['提醒', '备忘录', '钉钉', '邮件'];
+const URGENT_WORDS = ['截止', '提前', '紧急', '待你', '你能到', '尽快', '逾期', '马上'];
+const TASK_WORDS   = ['待办', '审批', '记得', '提交', '还有'];
+
+const Info = {
+  source: {
+    /* 接真实来源时只换这里的返回值，归一化和分组不用动 */
+    mock(){ return mockNotices; }
+  },
+  normalize(raw){
+    return raw.map(d => ({
+      app: d.app,
+      color: d.color || '#8E8E93',
+      time: d.time || '',
+      title: d.title || '',
+      text: d.text || '',
+      group: 'feed'
+    }));
+  },
+  classify(it){
+    const s = it.app + ' ' + it.title + ' ' + it.text;
+    if (URGENT_APPS.includes(it.app) || URGENT_WORDS.some(w => s.includes(w))) return 'urgent';
+    if (TASK_WORDS.some(w => s.includes(w))) return 'task';
+    if (IM_APPS.includes(it.app)) return 'people';
+    if (TASK_APPS.includes(it.app)) return 'task';
+    return 'feed';
+  },
+  group(items){
+    return items.map(it => ({ ...it, group: Info.classify(it) }));
+  },
+  summarize(items){
+    const counts = {};
+    GROUP_ORDER.forEach(g => { counts[g] = 0; });
+    items.forEach(it => { counts[it.group]++; });
+
+    const urgent = items.filter(it => it.group === 'urgent');
+    const timed = urgent.filter(it => TIME_RE.test(it.text) || TIME_RE.test(it.title));
+    const pick = urgent.find(it => it.app === '日历' && TIME_RE.test(it.text))
+      || timed[0] || urgent[0] || items[0];
+
+    let line = '';
+    if (pick){
+      const m = pick.text.match(TIME_RE) || pick.title.match(TIME_RE);
+      line = (pick.app === '日历' && m)
+        ? `建议先确认 ${m[1]} 的${pick.title}`
+        : `建议先处理「${pick.app} · ${pick.title}」`;
+    }
+    return { items, counts, total: items.length, urgent: counts.urgent, line };
+  },
+  async digest(){
+    const d = Info.summarize(Info.group(Info.normalize(Info.source.mock())));
+    Info.last = d;
+    return d;
+  }
+};
 
 const AI_RANK = [
   '微信','支付宝','高德','美团','B站','知乎',
@@ -2502,13 +2566,14 @@ setInterval(tickClock, 10000);
    ========================================================= */
 const noticeNodes = [];
 
-function buildNotices(){
+async function buildNotices(){
+  const digest = await Info.digest();
   GROUP_ORDER.forEach(g => {
     const lab = document.createElement('div');
     lab.className = 'g-label';
     lab.dataset.g = g;
     lab.style.color = GROUP_META[g].color;
-    const n = mockNotices.filter(x => x.group === g).length;
+    const n = digest.counts[g];
     lab.innerHTML = `<span class="g-dot"></span>${GROUP_META[g].label}<b>${n}</b>`;
     notifScroll.appendChild(lab);
     GROUP_META[g].el = lab;
@@ -2517,7 +2582,7 @@ function buildNotices(){
     bindLabel(g);
   });
 
-  mockNotices.forEach((d, i) => {
+  digest.items.forEach((d, i) => {
     const el = document.createElement('div');
     el.className = 'notice';
     el.innerHTML = `
@@ -3412,7 +3477,10 @@ function bootFrame(now){
    主屏
    ========================================================= */
 const HOME_LINE = '我们要构建什么？';
-const HOME_SUB  = '已读取 <em>12</em> 条消息 · 发现 <em>3</em> 条紧急<br>建议先确认 15:00 的架构评审';
+function homeSub(){
+  const d = Info.last;
+  return `已读取 <em>${d.total}</em> 条消息 · 发现 <em>${d.urgent}</em> 条紧急<br>${d.line}`;
+}
 
 function goHome(){
   S.screen = 'home';
@@ -3435,7 +3503,7 @@ function typeHome(){
       S.typed = true;
       setTimeout(() => {
         promptLine.classList.add('done');
-        promptSub.innerHTML = HOME_SUB;
+        promptSub.innerHTML = homeSub();
         promptSub.classList.add('on');
       }, 300);
     }
@@ -4167,6 +4235,7 @@ async function kemonChat(messages){
 window.kemon = {
   get config(){ return { ...KEMON.cfg }; },
   chat: kemonChat,
+  info: Info.digest,
   openSettings,
   version: '0.1'
 };
@@ -5049,8 +5118,8 @@ function flashOrb(){
 /* =========================================================
    初始化
    ========================================================= */
-function init(){
-  buildNotices();
+async function init(){
+  await buildNotices();
   buildMatrix();
   renderChips();
 

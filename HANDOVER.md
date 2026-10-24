@@ -113,6 +113,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 
 ## 10. 最近改动记录
 
+### 2026-10-24：信息层落地（mock 管线）
+
+- `kemon-os-v2.html` 新增 `Info` 模块：`source → normalize → group → summarize`；`mockNotices` 里的 `group` 字段已删除，分组改由规则计算，锁屏计数和主屏摘要都从 `Info.last` 取。
+- `Info.classify` 是唯一的分类接缝，之后换成模型调用即可，界面不用改；`window.kemon.info` 暴露 `Info.digest`。
+- `buildNotices()` / `init()` 改为 async，为将来的真实来源请求留位置。
+- 验证：浏览器加载后 `Info.last` 为 3/3/3/3，锁屏标签与主屏文案与改动前一致，控制台无报错。
+
 ### 2026-10-24：修复启动闪退（Android 11+ 全中）
 
 - 用 CI 模拟器（API 33 / 35）复现并抓到 NPE：`onCreate` 里 `hideSystemBars()` 在 `setContentView` 前取 `WindowInsetsController`，DecorView 还是 null。
