@@ -30,3 +30,12 @@ if [ ! -s "$dir/pid.txt" ]; then
   echo "::error::os.cintyez.launcher is not running after launch (API $api)"
   exit 1
 fi
+
+echo "=== native bridge ==="
+if grep -q "native bridge ready" "$dir/logcat.txt"; then
+  echo "native bridge ready"
+elif grep -q "native bridge absent" "$dir/logcat.txt"; then
+  echo "::warning::native bridge absent in WebView (API $api)"
+else
+  echo "::warning::no native bridge log line found (API $api)"
+fi

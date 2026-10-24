@@ -121,6 +121,7 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 新增 `KemonBridge.java`，`addJavascriptInterface(..., "CintyezNative")`；JS 侧 `kemonChat` 有桥走桥、无桥走 `fetch`。
 - 设置里的"测试连接"改为真实请求；Kemon 抽屉的回复改为真实推理，system prompt 里注入 `Info.last` 的分组结果。
 - 验证（浏览器 + 假 `CintyezNative`）：native 路径、fetch 路径、401 错误提示、测试连接、抽屉两轮消息均通过，控制台无报错。
+- 启动时 console 会打 `CintyezOS · native bridge ready/absent`，经 WebChromeClient 进 Logcat，用来确认桥是否注入；原生请求 90 秒超时。
 - **未验证**：真机上带真实 key 的请求；`http://` 局域网接口会被 Android 9+ 默认的 cleartext 策略挡住（当前只适合 https 接口）。
 
 ### 2026-10-24：信息层落地（mock 管线）

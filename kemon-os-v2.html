@@ -4233,10 +4233,14 @@ let chatSeq = 0;
 function nativeChat(url, key, body){
   return new Promise((resolve, reject) => {
     const id = ++chatSeq;
-    chatWaiters.set(id, { resolve, reject });
+    const timer = setTimeout(() => {
+      if (chatWaiters.delete(id)) reject(new Error('模型响应超时'));
+    }, 90000);
+    chatWaiters.set(id, { resolve, reject, timer });
     try {
       window.CintyezNative.chat(id, url, key || '', body);
     } catch (e){
+      clearTimeout(timer);
       chatWaiters.delete(id);
       reject(e);
     }
@@ -4255,6 +4259,7 @@ function kemonSystemPrompt(){
 window.kemonChatReply = function(id, payload){
   const waiter = chatWaiters.get(id);
   if (!waiter) return;
+  clearTimeout(waiter.timer);
   chatWaiters.delete(id);
   let d;
   try { d = JSON.parse(payload); } catch (_) { waiter.reject(new Error('通道返回了无法解析的数据')); return; }
@@ -5196,6 +5201,7 @@ function flashOrb(){
    初始化
    ========================================================= */
 async function init(){
+  console.log('CintyezOS · native bridge ' + (window.CintyezNative ? 'ready' : 'absent'));
   await buildNotices();
   buildMatrix();
   renderChips();

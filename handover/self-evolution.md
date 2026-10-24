@@ -49,9 +49,17 @@
 
 把 `test-android-hooks.js` 那类测试改成仓库内脚本（Playwright），覆盖：主题参数、返回键分层、左右抽屉、三指矩阵。HTML 每次推送都跑，避免"Android 壳好了、页面坏了"。
 
-### P2：开始信息层
+### P1：模型通道真机验证
 
-按 `README.md` 阶段 1：在 `kemon-os-v2.html` 里做 mock 信息层（`source → normalize → group → summarize → render`），先不接真实源、不上构建。这是路线图"如果只记下一步"的第一项。
+信息层和模型通道都已接通，但真机带真实 key 的请求还没验证过。装 latest APK → 设置里填 https 的 OpenAI 兼容地址 → "测试连接"；同时在 Logcat 里确认 `CintyezOS · native bridge ready`。
+
+- `http://` 局域网接口会被 Android 9+ 的 cleartext 策略挡住，要支持得改 manifest（`usesCleartextTraffic` 或 network security config）。
+- 冒烟脚本目前只验证启动，可以顺手 grep logcat 里的 `native bridge`，确认桥真的注入。
+- 浏览器预览走 `fetch`，多数接口会被 CORS 挡；能测的只有允许跨域的接口。
+
+### 已完成：信息层（mock 管线）
+
+`source → normalize → group → summarize` 已在 `kemon-os-v2.html` 里；`Info.classify` 是唯一的分类接缝，下一步用模型替换它，再接真实来源。
 
 ### P2：记忆搬迁
 
