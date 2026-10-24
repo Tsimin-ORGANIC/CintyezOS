@@ -65,6 +65,8 @@ jobs:
       matrix:
         api-level: [33, 35]
     steps:
+      - uses: actions/checkout@v4
+
       - name: Download APK
         uses: actions/download-artifact@v4
         with:
