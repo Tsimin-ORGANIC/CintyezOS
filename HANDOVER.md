@@ -34,6 +34,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
   - 非流式走 `CintyezNative.chat`，回调 `window.kemonChatReply(id, payload)`。
   - 流式（`opts.onChunk`）走 `CintyezNative.chatStream`，原生解析 SSE 后分批回调 `window.kemonChatChunk(id, text)`，结束 `kemonChatDone(id)`，失败 `kemonChatError(id, msg)`；JS 侧累积全文，Promise 在 done 时 resolve。原生每 40ms 合并一次 chunk；非 SSE 响应会自动退回整段 JSON。
 - 主屏问答：`inputDock` 提交后走 `askHome()`，结果写进 `homeAsk`（`#home.asking` 让大标题退场、≤720px 短屏隐藏语音球），复用 `kemonChat` 的 `onChunk` 逐字渲染。对话对象 `homeConvo` 同时 `unshift` 进 `AG_SESSIONS`；「在 Kemon 里继续」直接 `openAgChat(homeConvo)`，主屏和抽屉共用同一份 `msgs`，后续追问带完整历史。
+- 回复渲染 `mdHTML()`：先 `agEsc` 整体转义，再按行分块（标题/列表/引用/代码块/表格/分隔线），最后处理行内标记；主屏 `.ha-a` 与抽屉 `.ag-msg.k` 加 `.md`，用户消息保持纯文本。链接只放行 http/https。流式期间在文本末尾塞 `MD_CURSOR`（`\uE000`），渲染时换成光标插进最后一段/列表项。**LaTeX 未支持**（需要 KaTeX，与单文件轻量冲突，公式按纯文本显示）。
 - 架构：右侧快捷抽屉 + "更多设置"跳 Android 系统设置锚点 `#droid`；左侧 Kemon 代理抽屉；设置矩阵里只有唯一一个真图标。
 - 桌面边缘热区：`#leftEdgeZone`（左缘右滑开 Kemon）与 `#edgeZone`（右缘左滑开设置）均为 `top:88px; bottom:108px; width:30px`（2026-10-23 由 22px 加宽）。`updateEdgeZone()` 只在 `home/matrix` 且没有抽屉/设置/彩蛋打开时给它们加 `.on`。宽度必须 ≤ Android 的 `setSystemGestureExclusionRects` 排除区，否则外侧会被系统返回手势截走。
 - 本段新增的 Android 钩子：
@@ -120,6 +121,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：回复渲染 markdown
+
+- 症状：模型回复里的 `**紧急**`、`- `、表格竖线原样显示。
+- `mdHTML()`：先整体转义，再按行分块（标题/列表/引用/代码块/表格/分隔线），行内处理粗体、斜体、删除线、行内代码、链接（仅 http/https）；只作用于 Kemon 的回复（`.md`），用户气泡保持纯文本。流式时在文末塞 `MD_CURSOR`，光标跟着最后一段/列表项走；重绘失败（断流）时用累计的原始文本，不会丢掉已生成部分。
+- 验证（浏览器 + 假桥）：主屏与抽屉的流式中间态、完成态、断流保留、XSS（`<img onerror>`、`javascript:` 链接）均通过，无控制台报错；`check-home-regression`、`test-home-long` 仍通过。
+- **未做**：LaTeX。真排版要 KaTeX（≈1MB 脚本+字体），与单文件轻量冲突；目前公式按纯文本显示。等真的出现公式需求再决定要不要内联打包。
 
 ### 2026-10-24：流式回复夹带 `null`
 
