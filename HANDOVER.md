@@ -28,12 +28,13 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 
 ## 3. HTML 应用（kemon-os-v2.html）
 
-- 状态机：`S = {screen:'lock'|'boot'|'home'|'matrix', mode, settingsOpen, agOpen, theme...}`；localStorage 键 `cintyez.theme`、`cintyez.kemon`；`KEMON.connected()`；对外接缝 `window.kemon = {config, chat, info, openSettings, version:'0.1'}`。API key 存 localStorage 是**有意的原型接缝**（用户不担心隐私，玩具项目）。
+- 状态机：`S = {screen:'lock'|'boot'|'home'|'matrix', mode, settingsOpen, agOpen, theme...}`；localStorage 键 `cintyez.theme`、`cintyez.kemon`、`cintyez.chats`；`KEMON.connected()`；对外接缝 `window.kemon = {config, chat, info, openSettings, version:'0.1'}`。API key 存 localStorage 是**有意的原型接缝**（用户不担心隐私，玩具项目）。
 - 信息层 `Info`：`source → normalize → group → summarize`，`Info.classify` 是分类接缝（现在是规则，之后可换模型）；锁屏计数和主屏摘要都从 `Info.last` 取。
 - 模型通道 `kemonChat(messages, opts)`：有原生桥时走 APK 内 HTTP，否则浏览器 `fetch` 直连；返回 `{content, model}`，错误抛 `Error`。接口地址允许只填到 `/v1`，`chatEndpoint()` 会自动补 `/chat/completions`；HTTP 错误优先取 JSON 的 `error.message`，HTML 错误提示改地址。
   - 非流式走 `CintyezNative.chat`，回调 `window.kemonChatReply(id, payload)`。
   - 流式（`opts.onChunk`）走 `CintyezNative.chatStream`，原生解析 SSE 后分批回调 `window.kemonChatChunk(id, text)`，结束 `kemonChatDone(id)`，失败 `kemonChatError(id, msg)`；JS 侧累积全文，Promise 在 done 时 resolve。原生每 40ms 合并一次 chunk；非 SSE 响应会自动退回整段 JSON。
 - 主屏问答：`inputDock` 提交后走 `askHome()`，结果写进 `homeAsk`（`#home.asking` 让大标题淡出隐藏、≤720px 短屏隐藏语音球），复用 `kemonChat` 的 `onChunk` 逐字渲染。对话对象 `homeConvo` 同时 `unshift` 进 `AG_SESSIONS`；「在 Kemon 里继续」把 `homeConvo` 交给 `openAgChat()` 后调用 `resetHomeAsk()`：主页恢复空状态、重算问候和副标题，下次提问新建会话，旧会话留在抽屉列表。
+- 会话存储 `cintyez.chats`：`{v:1, sessions:[{id,ws,time,icon,title,ts,msgs,needConnect}]}`。`loadChats()` 逐段校验（非法 `ws`/`icon` 回退、消息必须有 `r`/`t`、空会话丢弃）；**没有存档**才用 `AG_SEED` 五段种子，存档是空数组就保持空，损坏 JSON 回退种子。`saveChats()` 在主页提问/回答、抽屉新会话/首条消息/回答后立即写入，只存最近 40 段（localStorage 配额满时退到 8 段）。带 `ts` 的会话加载时用 `chatTime()` 重算「刚刚 / N 分钟前 / HH:MM / 昨天 / 周X / M月D日」，会话顶部日期用 `chatDay()`。重启后主页保持空态，旧对话都在抽屉列表里。
 - 主屏文案 `homeLine()`：按小时给问候（早/上午/中午/下午/晚/夜深），再结合 `Info.last` 的紧急、待办、人际数量生成一句现状；没有数据时退回 `HOME_FALLBACK`。`typeHome()` 逐字打出，`resetHomeAsk()` 直接重设。提问期间 `#home.asking .prompt-line{opacity:0}` 整行隐藏。
 - 回复渲染 `mdHTML()`：先 `agEsc` 整体转义，再按行分块（标题/列表/引用/代码块/表格/分隔线），最后处理行内标记；主屏 `.ha-a` 与抽屉 `.ag-msg.k` 加 `.md`，用户消息保持纯文本。链接只放行 http/https。流式期间在文本末尾塞 `MD_CURSOR`（`\uE000`），渲染时换成光标插进最后一段/列表项。
 - 公式：KaTeX 0.16.47 已整段内嵌（`<style id="katex-css">` + `<script id="katex-js">`，20 个 woff2 字体转 base64），离线可用。`mdHTML` 支持 `$…$`、`$$…$$`、`\(...\)`、`\[...\]`；代码块/行内代码里的 `$` 不解析，`$5`、`$6` 这类价格和转义的 `\$` 不会被误判。更新 KaTeX 用 `tools/bundle-katex.js`。
@@ -123,6 +124,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：对话持久化（cintyez.chats）
+
+- 会话从 `AG_SESSIONS` 内存数组改为启动时 `loadChats()` 恢复、每次变动 `saveChats()` 落盘；无存档时才展示五段种子，空存档保持空，损坏存档安全回退。
+- 每段会话新增 `ts`（种子会话保留静态 `time`）；列表时间在加载时重算，避免永远显示「刚刚」。会话顶部的日期也从当前会话的 `ts` 算。
+- 重启后主页不还原旧问答（符合「迁移后主页清空」的设定），对话都能在抽屉里续上。
+- 验证（浏览器，file:// 下 localStorage 跨 reload）：主页问答与抽屉新会话都能重开恢复，markdown/KaTeX 完整；损坏 JSON、空存档、非法字段、40 段上限、跨天时间显示全部符合预期，无控制台报错。
 
 ### 2026-10-24：主页问候、会话迁移、内嵌 KaTeX
 

@@ -4932,7 +4932,98 @@ const AG_ICON = {
   chat:'<svg viewBox="0 0 24 24"><path d="M4 6h16v10H9l-5 4z"/></svg>'
 };
 
-const AG_SESSIONS = [
+const AG_WS = ['全部', '桌面', '设计', '记忆'];
+const CHAT_KEY = 'cintyez.chats';
+const CHAT_CAP = 40;          // 只存最近 40 段，避免 localStorage 被撑爆
+
+function chatTime(ts){
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (!(diff >= 0)) return '';
+  if (diff < 60 * 1000) return '刚刚';
+  if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + ' 分钟前';
+  const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  if (d.toDateString() === now.toDateString()) return hm;
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return '昨天';
+  if (diff < 6 * 864e5) return '周' + '日一二三四五六'[d.getDay()];
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+function chatDay(ts){
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return '今天';
+  const y = new Date(now);
+  y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return '昨天';
+  return (d.getMonth() + 1) + '月' + d.getDate() + '日';
+}
+
+/* 没有存档时返回 null（用种子会话），存档为空数组时原样返回（保持清爽） */
+function loadChats(){
+  let raw;
+  try { raw = localStorage.getItem(CHAT_KEY); } catch (_) { return null; }
+  if (!raw) return null;
+  let data;
+  try { data = JSON.parse(raw); } catch (_) { return null; }
+  if (!data || !Array.isArray(data.sessions)) return null;
+  const out = [];
+  data.sessions.forEach(s => {
+    if (!s || typeof s.id !== 'string' || !Array.isArray(s.msgs)) return;
+    const msgs = s.msgs
+      .filter(m => m && typeof m.t === 'string' && (m.r === 'u' || m.r === 'k'))
+      .map(m => ({ r: m.r, t: m.t }));
+    if (!msgs.length) return;
+    const sess = {
+      id: s.id,
+      ws: AG_WS.indexOf(s.ws) > 0 ? s.ws : '桌面',
+      title: (typeof s.title === 'string' && s.title) || '新的对话',
+      icon: AG_ICON[s.icon] ? s.icon : 'chat',
+      msgs
+    };
+    if (typeof s.ts === 'number' && isFinite(s.ts)){
+      sess.ts = s.ts;
+      sess.time = chatTime(s.ts) || '刚刚';
+    } else {
+      sess.time = (typeof s.time === 'string' && s.time) || '';
+    }
+    if (s.needConnect) sess.needConnect = true;
+    out.push(sess);
+  });
+  return out;
+}
+
+function saveChats(){
+  const pack = () => ({ v: 1, sessions: AG_SESSIONS.slice(0, CHAT_CAP).map(s => {
+    const o = { id: s.id, ws: s.ws, time: s.time, icon: s.icon, title: s.title, msgs: s.msgs };
+    if (typeof s.ts === 'number') o.ts = s.ts;
+    if (s.needConnect) o.needConnect = true;
+    return o;
+  }) });
+  try {
+    localStorage.setItem(CHAT_KEY, JSON.stringify(pack()));
+  } catch (_) {
+    try {
+      localStorage.setItem(CHAT_KEY, JSON.stringify({ v: 1, sessions: pack().sessions.slice(0, 8) }));
+    } catch (_) {}
+  }
+}
+
+/* 有新消息的会话回到列表顶部（也保证存档上限先淘汰真正的旧会话） */
+function bumpSession(s){
+  s.ts = Date.now();
+  s.time = chatTime(s.ts);
+  const i = AG_SESSIONS.indexOf(s);
+  if (i > 0){
+    AG_SESSIONS.splice(i, 1);
+    AG_SESSIONS.unshift(s);
+  }
+}
+
+const AG_SEED = [
   {
     id:'s1', ws:'桌面', time:'14:32', icon:'bell', title:'为什么通知这么多',
     msgs:[
@@ -4969,6 +5060,8 @@ const AG_SESSIONS = [
     ]
   }
 ];
+
+const AG_SESSIONS = loadChats() || AG_SEED;
 
 let agFilterWs = '全部';
 let agCurrent = null;
@@ -5233,9 +5326,8 @@ function paintAgState(){
 }
 
 function agRenderWs(){
-  const keys = ['全部', '桌面', '设计', '记忆'];
   agWs.innerHTML = '';
-  keys.forEach(k => {
+  AG_WS.forEach(k => {
     const n = k === '全部' ? AG_SESSIONS.length : AG_SESSIONS.filter(s => s.ws === k).length;
     const b = document.createElement('button');
     b.type = 'button';
@@ -5306,7 +5398,7 @@ function agRenderThread(){
   agThread.innerHTML = '';
   const day = document.createElement('div');
   day.className = 'ag-day';
-  day.textContent = '今天';
+  day.textContent = agCurrent && agCurrent.ts ? chatDay(agCurrent.ts) : '今天';
   agThread.appendChild(day);
 
   if (!agCurrent) return;
@@ -5366,15 +5458,20 @@ function agScrollThread(smooth){
 }
 
 function openAgChat(session){
-  agCurrent = session || {
-    id: 'local-' + Date.now(),
-    title: '新的对话',
-    ws: agFilterWs === '全部' ? '桌面' : agFilterWs,
-    time: '刚刚',
-    icon: 'spark',
-    msgs: [],
-    isNew: true
-  };
+  if (!session){
+    const ts = Date.now();
+    session = {
+      id: 'local-' + ts,
+      title: '新的对话',
+      ws: agFilterWs === '全部' ? '桌面' : agFilterWs,
+      ts,
+      time: '刚刚',
+      icon: 'spark',
+      msgs: [],
+      isNew: true
+    };
+  }
+  agCurrent = session;
   agChatTitle.textContent = agCurrent.title;
   agChatMeta.textContent = 'KEMON · ' + (KEMON.connected() ? KEMON.cfg.model : '本地');
   agInput.value = '';
@@ -5400,20 +5497,22 @@ function agSendMessage(){
   if (!text || agSend.disabled) return;
   const convo = agCurrent;
 
+  bumpSession(convo);
+
   if (convo.isNew){
     convo.isNew = false;
     convo.title = text.length > 22 ? text.slice(0, 22) + '…' : text;
-    convo.time = '刚刚';
     convo.msgs = [];
     AG_SESSIONS.unshift(convo);
     agChatTitle.textContent = convo.title;
     agRenderWs();
-    agRenderSessions();
   }
 
   agInput.value = '';
   agAutoGrow();
   convo.msgs.push({ r:'u', t:text });
+  agRenderSessions();
+  saveChats();
   agRenderThread();
   agScrollThread(true);
 
@@ -5460,6 +5559,7 @@ function agSendMessage(){
     typing.remove();
     if (bubble) bubble.remove();
     convo.msgs.push({ r:'k', t: reply });
+    saveChats();
     agSend.disabled = false;
     if (agCurrent === convo && agEl.classList.contains('chat')){
       agRenderThread();
@@ -5635,10 +5735,12 @@ let homeBusy = false;
 
 function homeSession(first){
   if (!homeConvo){
+    const ts = Date.now();
     homeConvo = {
-      id: 'home-' + Date.now(),
+      id: 'home-' + ts,
       title: first.length > 22 ? first.slice(0, 22) + '…' : first,
       ws: '桌面',
+      ts,
       time: '刚刚',
       icon: 'spark',
       msgs: []
@@ -5661,8 +5763,10 @@ async function askHome(text){
   homeAskA.innerHTML = '';
   homeAskA.scrollTop = 0;
   paintAskFade();
-  convo.time = '刚刚';
+  bumpSession(convo);
   convo.msgs.push({ r:'u', t:text });
+  agRenderSessions();
+  saveChats();
 
   let answer = '';
   const history = convo.msgs.map(m => ({ role: m.r === 'u' ? 'user' : 'assistant', content: m.t }));
@@ -5691,6 +5795,7 @@ async function askHome(text){
   paintAskFade();
   homeAsk.classList.add('done');
   convo.msgs.push({ r:'k', t:answer });
+  saveChats();
   homeBusy = false;
   if (convo === agCurrent && agEl.classList.contains('chat')){
     agRenderThread();
