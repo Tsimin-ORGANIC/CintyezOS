@@ -97,6 +97,28 @@ public class KemonBridge {
         return out.toString();
     }
 
+    /* 拉起应用本体；没有启动入口时提示。 */
+    @JavascriptInterface
+    public void openApp(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return;
+        web.post(() -> {
+            try {
+                Intent intent = web.getContext().getPackageManager()
+                    .getLaunchIntentForPackage(pkg);
+                if (intent == null) {
+                    Toast.makeText(web.getContext(), "该应用没有启动入口",
+                        Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                web.getContext().startActivity(intent);
+            } catch (Exception e) {
+                Toast.makeText(web.getContext(), "打不开应用",
+                    Toast.LENGTH_SHORT).show();
+            }
+        });
+    }
+
     /* 跳系统「应用信息」页（每应用的权限管理入口）。 */
     @JavascriptInterface
     public void openAppDetails(String pkg) {

@@ -706,14 +706,8 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
 .app .glyph{width:48%;height:48%;opacity:.96;}
 .app.hover:not(.sel){outline:1px solid var(--fg-3);outline-offset:3px;}
 
-/* 真实应用角标：APK 里匹配到已安装应用的节点 */
-.app-real{
-  position:absolute;right:7%;top:7%;width:12%;height:12%;
-  border-radius:50%;
-  background:var(--fg-2);
-  box-shadow:0 0 0 2px var(--node-bg);
-  opacity:.92;pointer-events:none;
-}
+/* 真实应用里没有设计符号的，用应用名首字当图标 */
+.glyph-text{font-weight:600;display:flex;align-items:center;justify-content:center;}
 
 /* 聚焦环：只切 class，不做逐帧写入；只动 transform / opacity */
 .app::before{
@@ -861,6 +855,7 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
 .app-menu.on > *:nth-child(1){animation-delay:0ms;}
 .app-menu.on > *:nth-child(2){animation-delay:35ms;}
 .app-menu.on > *:nth-child(3){animation-delay:70ms;}
+.app-menu.on > *:nth-child(4){animation-delay:105ms;}
 @keyframes menuItemIn{
   from{opacity:0;transform:translateY(8px);}
   to{opacity:1;transform:none;}
@@ -1857,6 +1852,7 @@ input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:d
     <div class="am-head"><i id="amDot"></i><span id="amName">应用</span></div>
     <button data-act="agent">加入 Agent 框<small>交给 AI 代你操作</small></button>
     <button data-act="open">打开应用</button>
+    <button data-act="details" id="amDetails" hidden>应用信息<small>权限与通知</small></button>
   </div>
 
   <div class="launch" id="launch">
@@ -2376,7 +2372,7 @@ const mockApps = [
   { name:'设置',    id:'settings',    iconColor:'#3DDC84' }
 ];
 
-/* 真实应用包名别名：APK 里先用它精确命中，装的不是这个发行版时靠 label 兜底 */
+/* 真实应用包名 → 设计图标 id：矩阵里能对上的保留原视觉 */
 const APP_PKG = {
   bilibili:'tv.danmaku.bili', zhihu:'com.zhihu.android', wechat:'com.tencent.mm',
   taobao:'com.taobao.taobao', jd:'com.jingdong.app.mall', douyin:'com.ss.android.ugc.aweme',
@@ -2390,47 +2386,53 @@ const APP_PKG = {
   discord:'com.discord', obsidian:'md.obsidian'
   /* Linear / Vercel 无官方安卓应用；设置走内置面板，不参与匹配 */
 };
-let realAppCount = 0;
+const PKG_APP = {};
+Object.keys(APP_PKG).forEach(k => { PKG_APP[APP_PKG[k]] = k; });
 
-function normLabel(s){ return String(s || '').toLowerCase().replace(/\s+/g, ''); }
+let realApps = null;   // 真机节点数组；null = 无桥/拉取失败 → 矩阵用 31 个设计稿节点
 
-/* 拉可启动应用清单给矩阵节点挂 pkg（点击跳系统应用信息页）。
-   先按别名表命中包名，再按归一化 label 精确匹配；无桥（浏览器）直接跳过。 */
-function matchRealApps(){
-  realAppCount = 0;
-  mockApps.forEach(a => { a.pkg = ''; });
+function pkgColor(pkg){
+  let h = 0;
+  for (let i = 0; i < pkg.length; i++) h = (h * 31 + pkg.charCodeAt(i)) >>> 0;
+  return mockApps[h % mockApps.length].iconColor;
+}
+
+/* 拉真机可启动应用清单并转成矩阵节点：已知包用设计图标、按 AI_RANK 排前，
+   未知应用用名字首字 + 哈希色排后；系统设置与合成节点重复，剔除；
+   拉不到就保持 null，矩阵回退设计稿节点（浏览器就是这条路径）。 */
+function loadRealApps(){
+  realApps = null;
   if (!window.CintyezNative || !window.CintyezNative.apps) return;
   let list;
   try { list = JSON.parse(window.CintyezNative.apps() || '[]'); } catch (_) { return; }
-  if (!Array.isArray(list)) return;
+  if (!Array.isArray(list) || !list.length) return;
 
-  const byPkg = new Map();
-  const labels = [];
+  const seen = new Set();
+  const known = [], unknown = [];
   list.forEach(it => {
     if (!it || typeof it.pkg !== 'string' || !it.pkg) return;
-    byPkg.set(it.pkg, true);
-    if (typeof it.label === 'string' && it.label) labels.push({ key: normLabel(it.label), pkg: it.pkg });
+    if (it.pkg === 'com.android.settings' || seen.has(it.pkg)) return;
+    seen.add(it.pkg);
+    const label = (typeof it.label === 'string' && it.label) ? it.label : it.pkg;
+    const id = PKG_APP[it.pkg];
+    if (id && id !== 'settings'){
+      const m = mockApps.find(a => a.id === id);
+      known.push({ name: m ? m.name : label, id, iconColor: m ? m.iconColor : pkgColor(it.pkg), pkg: it.pkg });
+    } else {
+      unknown.push({ name: label, id: '', iconColor: pkgColor(it.pkg), pkg: it.pkg });
+    }
   });
+  if (!known.length && !unknown.length) return;
 
-  mockApps.forEach(app => {
-    if (app.id === 'settings') return;
-    let pkg = (APP_PKG[app.id] && byPkg.has(APP_PKG[app.id])) ? APP_PKG[app.id] : '';
-    if (!pkg){
-      const exact = labels.filter(l => l.key === normLabel(app.name));
-      if (exact.length === 1) pkg = exact[0].pkg;
-    }
-    if (!pkg && /^[a-z0-9 .&-]{4,}$/i.test(app.name)){
-      /* 英文短名（GitHub / Spotify…）允许 label 包含命中，唯一才算，避免抢错 */
-      const key = normLabel(app.name);
-      const loose = labels.filter(l => l.key.includes(key));
-      if (loose.length === 1) pkg = loose[0].pkg;
-    }
-    if (pkg){ app.pkg = pkg; realAppCount++; }
-  });
+  known.sort((a, b) => AI_RANK.indexOf(a.name) - AI_RANK.indexOf(b.name));
+  unknown.sort((a, b) => a.name.localeCompare(b.name, 'zh'));
+  realApps = known.concat(unknown, [{ name:'设置', id:'settings', iconColor:'#3DDC84' }]);
 }
 
 function matrixSub(){
-  return '按重要度推算 · 31 个节点' + (realAppCount ? ` · ${realAppCount} 个真实应用` : '');
+  return realApps
+    ? `已接入真机 · ${realApps.length - 1} 个应用`
+    : '按重要度推算 · 31 个节点';
 }
 
 /* 单色能力符号：统一 24 栅格、1.7 线宽、圆头。品牌色只留在极淡的底色里。 */
@@ -2658,6 +2660,7 @@ const mSub        = $('mSub');
 const appMenu     = $('appMenu');
 const amName      = $('amName');
 const amDot       = $('amDot');
+const amDetails   = $('amDetails');
 const menuScrim   = $('menuScrim');
 const launchEl    = $('launch');
 const launchIcon  = $('launchIcon');
@@ -3750,9 +3753,36 @@ let panLimitX = 600, panLimitY = 800;
 let selIdx = -1;                  // 当前聚焦的 app（第一次点击进入，第二次点击才打开）
 let panTX = null, panTY = null;   // 视角平移目标（null = 无自动聚焦动画）
 
+/* 环容量按 6/11/14 的设计比例分摊 n 个应用；余量先补小数部分大的环，
+   三环都满后全部进最外环（周长最大，塞得下） */
+const APP_RINGS = RINGS.filter(r => !r.core);
+const RING_CAP = APP_RINGS.reduce((s, r) => s + r.n, 0);
+function ringCounts(n){
+  const counts = APP_RINGS.map(r => Math.floor(r.n * n / RING_CAP));
+  let rest = n - counts.reduce((s, c) => s + c, 0);
+  const byFrac = APP_RINGS.map((r, i) => i)
+    .sort((a, b) => (APP_RINGS[b].n * n / RING_CAP % 1) - (APP_RINGS[a].n * n / RING_CAP % 1));
+  for (const i of byFrac){
+    if (rest <= 0) break;
+    const add = Math.min(rest, APP_RINGS[i].n - counts[i]);
+    if (add > 0){ counts[i] += add; rest -= add; }
+  }
+  counts[counts.length - 1] += rest;
+  return counts;
+}
+
+/* 图标：有设计符号的用符号；其余真实应用用名字首字 */
+function appIconHTML(app, svgSize, fontPx){
+  if (ICONS[app.id]) return iconSVG(app.id, svgSize);
+  const ch = (String(app.name || '?').trim().charAt(0) || '?').toUpperCase();
+  return `<span class="glyph glyph-text" style="font-size:${fontPx || 16}px">${agEsc(ch)}</span>`;
+}
+
 function buildMatrix(){
   mScene.innerHTML = '';
   appNodes.length = 0;
+  const apps = realApps || rankedApps;
+  const counts = ringCounts(apps.length);
   let gIdx = 0;
 
   RINGS.forEach((ring, ri) => {
@@ -3771,16 +3801,17 @@ function buildMatrix(){
       return;
     }
 
-    for (let i = 0; i < ring.n; i++){
-      const app = rankedApps[gIdx];
+    const n = counts[APP_RINGS.indexOf(ring)] || 0;
+    for (let i = 0; i < n; i++){
+      const app = apps[gIdx];
       if (!app) break;
 
-      const a = (i / ring.n) * Math.PI * 2 - Math.PI / 2 + ri * 0.22;
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2 + ri * 0.22;
       const el = document.createElement('div');
       el.className = 'app';
       el.style.width = el.style.height = ring.size + 'px';
       el.style.setProperty('--tint', app.iconColor);
-      el.innerHTML = iconSVG(app.id) + (app.pkg ? '<span class="app-real"></span>' : '');
+      el.innerHTML = appIconHTML(app, ring.size, Math.round(ring.size * .3));
 
       mScene.appendChild(el);
       appNodes.push({
@@ -4134,6 +4165,8 @@ function showMenu(node){
   amName.textContent = node.app.name;
   amDot.style.color = node.app.iconColor;
   amDot.innerHTML = iconSVG(node.app.id, 16);
+  /* 「应用信息」只给真实应用：跳系统详情页（权限与通知入口） */
+  amDetails.hidden = !(node.app.pkg && window.CintyezNative && window.CintyezNative.openAppDetails);
 
   appMenu.style.transitionDuration = '0ms';
   appMenu.classList.remove('on');
@@ -4181,6 +4214,9 @@ appMenu.addEventListener('click', (e) => {
   hideMenu();
   if (act === 'open') launchApp(node.app);
   if (act === 'agent') addAgentObject(node.app);
+  if (act === 'details' && node.app.pkg && window.CintyezNative && window.CintyezNative.openAppDetails){
+    try { window.CintyezNative.openAppDetails(node.app.pkg); } catch (_) {}
+  }
 });
 
 document.addEventListener('pointerdown', (e) => {
@@ -4201,7 +4237,7 @@ function launchApp(app){
   const dark = document.documentElement.dataset.theme === 'dark';
   launchEl.style.setProperty('--launch-tint', rgba(app.iconColor, dark ? .16 : .1));
   launchIcon.style.setProperty('--tint', app.iconColor);
-  launchIcon.innerHTML = iconSVG(app.id, 36);
+  launchIcon.innerHTML = appIconHTML(app, 36, 22);
   launchName.textContent = app.name;
   launchEl.classList.add('on');
   clearTimeout(launchTimer);
@@ -4212,11 +4248,16 @@ function launchApp(app){
     }, 700);
     return;
   }
-  if (app.pkg && window.CintyezNative && window.CintyezNative.openAppDetails){
-    /* 匹配到真实安装应用：播完动效跳系统「应用信息」页（权限管理入口） */
-    launchSub.textContent = '真实应用 · 打开应用信息';
+  if (app.pkg && window.CintyezNative && (window.CintyezNative.openApp || window.CintyezNative.openAppDetails)){
+    /* 真实应用：播完动效直接拉起应用本体（桥里没有 openApp 时退应用信息页） */
+    const native = window.CintyezNative;
+    const viaOpen = !!native.openApp;
+    launchSub.textContent = viaOpen ? '真实应用 · 正在打开' : '真实应用 · 打开应用信息';
     launchTimer = setTimeout(() => {
-      try { window.CintyezNative.openAppDetails(app.pkg); } catch (_) {}
+      try {
+        if (viaOpen) native.openApp(app.pkg);
+        else native.openAppDetails(app.pkg);
+      } catch (_) {}
       launchEl.classList.remove('on');
     }, 700);
     return;
@@ -5947,7 +5988,7 @@ function flashOrb(){
 async function init(){
   console.log('CintyezOS · native bridge ' + (window.CintyezNative ? 'ready' : 'absent'));
   await buildNotices();
-  matchRealApps();
+  loadRealApps();
   buildMatrix();
   mSub.textContent = matrixSub();
   renderChips();

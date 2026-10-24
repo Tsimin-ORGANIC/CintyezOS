@@ -56,10 +56,10 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
   - 外链跳系统浏览器（`Intent.ACTION_VIEW`）；console 日志进 Logcat，tag `CintyezOS`。
 - **KemonBridge.java**：`@JavascriptInterface` 暴露为 `window.CintyezNative`，单线程池里用 `HttpURLConnection` POST OpenAI 兼容接口（连接 15s / 读 90s）。`chat` 返回整段 `{ok, content, model}`；`chatStream` 读 `text/event-stream`，按 `delta.content` 抽取文本，40ms 合并后 `web.post` 回调 JS；非 SSE 自动退回整段解析。`onDestroy` 里 `shutdown()`。
   - `clipboard()`：读系统剪贴板返回字符串（失败返回空串）。设置里的「粘贴」按钮用它兜底——部分 ROM 的安全键盘会屏蔽密码框的长按粘贴。
-  - `apps()` / `openAppDetails(pkg)`（2026-10-24）：返回可启动应用清单 `[{label,pkg}]`（launcher intent 查询，Android 11+ 自动可见，**没加** QUERY_ALL_PACKAGES）；跳系统「应用信息」页。见 §10。
+  - `apps()` / `openApp(pkg)` / `openAppDetails(pkg)`（2026-10-24）：返回可启动应用清单 `[{label,pkg}]`、拉起应用本体、跳系统「应用信息」页；Manifest 已加 QUERY_ALL_PACKAGES 保证全量可见。见 §10。
 - 长按/选中：**不要**再给 WebView 调 `setLongClickable(false)`（会连输入框的粘贴菜单一起禁掉）。选择范围由 CSS 控制：`body` 禁止选中，`input,textarea` 允许。
 - **app/build.gradle**：`syncWeb` Copy 任务把 `../kemon-os-v2.html` 复制成 `index.html` 到 `generated/webAssets`，挂到 `preBuild`；versionCode/Name 可用 `-P` 覆盖（CI 用 run_number）。
-- Manifest：INTERNET、singleTask、竖屏、adjustResize、`enableOnBackInvokedCallback=false`。
+- Manifest：INTERNET、QUERY_ALL_PACKAGES（2026-10-24 加，保证矩阵能看到全部已安装应用）、singleTask、竖屏、adjustResize、`enableOnBackInvokedCallback=false`。
 - 图标：`mipmap-*` 的 orb 图标用 Playwright 脚本从 app 自身 CSS 生成（临时目录 `C:\Users\User\AppData\Local\Temp\kemon-shot\make-icons.js`）。
 
 ## 5. CI（.github/workflows/build-apk.yml）
@@ -125,6 +125,16 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：矩阵改由真机应用驱动 + 拉起应用本体
+
+- 真机反馈：上一版「31 个 mock 节点匹配真实应用」只匹配上美团（跳转流程本身是通的）。**转向**：不再拿固定名单去对——PackageManager 给多少应用，矩阵就显示多少；点击直接拉起应用本体，详情页退到长按菜单。
+- Manifest 加 `QUERY_ALL_PACKAGES`（普通权限，安装即生效；侧载 debug 包不受 Play 政策影响），消除 Android 11+ 包可见性过滤的不确定性（也排除「只有美团可见」是 ROM 过滤所致）。
+- 新桥方法 `openApp(pkg)`：`getLaunchIntentForPackage` 拉起应用本体，无启动入口/失败 Toast。`apps()` / `openAppDetails()` 保留。
+- HTML：`loadRealApps()` 取代 matchRealApps——已知包（`APP_PKG` 反查 `PKG_APP`）保留设计图标与短名、按 `AI_RANK` 排内环；未知应用用**名字首字**当图标（`.glyph-text`，字号随环尺寸 `size*.3`）、包名哈希从 31 个品牌色取色，按名排序排后；剔除 `com.android.settings`（与合成「设置」重复），末尾追加合成「设置」节点（仍开内置 `#droid`）；拉取失败/空清单整体回退 31 设计稿节点（浏览器路径不变）。`buildMatrix` 节点源改为该数组，环容量按 6/11/14 设计比例分摊（`ringCounts`，余量进最外环）；上一版的 `.app-real` 角标删除。
+- `launchApp()`：真实节点播 700ms 动效后 `openApp(pkg)`（桥无 openApp 时退 openAppDetails），副标题「真实应用 · 正在打开」；长按菜单新增「应用信息<small>权限与通知</small>」（仅有 pkg 的节点显示）→ `openAppDetails`；矩阵副标题真机「已接入真机 · N 个应用」/ 浏览器维持「按重要度推算 · 31 个节点」（`matrixSub()` 分支）。
+- 验证（浏览器 + 假桥，`test-real-apps.js` 31/31）：节点数、AI_RANK 排序、系统设置剔除、合成设置在末尾；已知节点用符号图标、未知节点首字字形（有/招/Q）；真实两击路径走 `openApp` 且参数正确、不误走详情页；长按「应用信息」走 `openAppDetails`；无 openApp 的桥回退详情页；无桥 31 节点与文案完全回归；非法 JSON / 空数组 / 抛异常回退；8 与 45 两种规模环分配（[2,3,4] / [8,16,22]）坐标有限；全程无 console 报错。`node --check` 3 块通过；`check-home-regression` 正常；首字字形经截图目检（清晰、居中、与符号图标协调）。
+- **未验证**：Java 编译（CI `assembleDebug`）；真机行为——QUERY_ALL_PACKAGES 是否带来全量应用、真实拉起、首字字形在真机渲染的观感（截图反馈后可调字号/取色）。
 
 ### 2026-10-24：矩阵接真实应用（PackageManager）
 
