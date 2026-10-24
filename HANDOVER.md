@@ -28,7 +28,9 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 
 ## 3. HTML 应用（kemon-os-v2.html）
 
-- 状态机：`S = {screen:'lock'|'boot'|'home'|'matrix', mode, settingsOpen, agOpen, theme...}`；localStorage 键 `cintyez.theme`、`cintyez.kemon`；`KEMON.connected()`；对外接缝 `window.kemon = {config, chat, openSettings, version:'0.1'}` 和 `kemonChat()`。API key 存 localStorage 是**有意的原型接缝**（用户不担心隐私，玩具项目）。
+- 状态机：`S = {screen:'lock'|'boot'|'home'|'matrix', mode, settingsOpen, agOpen, theme...}`；localStorage 键 `cintyez.theme`、`cintyez.kemon`；`KEMON.connected()`；对外接缝 `window.kemon = {config, chat, info, openSettings, version:'0.1'}`。API key 存 localStorage 是**有意的原型接缝**（用户不担心隐私，玩具项目）。
+- 信息层 `Info`：`source → normalize → group → summarize`，`Info.classify` 是分类接缝（现在是规则，之后可换模型）；锁屏计数和主屏摘要都从 `Info.last` 取。
+- 模型通道 `kemonChat(messages)`：有 `window.CintyezNative.chat` 时走原生 HTTP（APK），否则浏览器 `fetch` 直连；返回 `{content, model}`，错误抛 `Error`。原生回调入口是全局 `window.kemonChatReply(id, payload)`。
 - 架构：右侧快捷抽屉 + "更多设置"跳 Android 系统设置锚点 `#droid`；左侧 Kemon 代理抽屉；设置矩阵里只有唯一一个真图标。
 - 桌面边缘热区：`#leftEdgeZone`（左缘右滑开 Kemon）与 `#edgeZone`（右缘左滑开设置）均为 `top:88px; bottom:108px; width:30px`（2026-10-23 由 22px 加宽）。`updateEdgeZone()` 只在 `home/matrix` 且没有抽屉/设置/彩蛋打开时给它们加 `.on`。宽度必须 ≤ Android 的 `setSystemGestureExclusionRects` 排除区，否则外侧会被系统返回手势截走。
 - 本段新增的 Android 钩子：
@@ -45,6 +47,7 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
   - **手势排除**：`updateGestureExclusions()` 给左右边缘各设 30dp 排除区（API 29+，上限宽度/4），保护抽屉滑动手势不被系统返回手势吃掉；由 `web.post(...)` + `addOnLayoutChangeListener` 双保险触发。**这个值要与 HTML 的 `#edgeZone` / `#leftEdgeZone` 宽度保持一致**（2026-10-23 一起从 22px/24dp 调到 30px/30dp）。
   - 返回键：先 `evaluateJavascript` 调 `window.kemonAndroidBack()`，返回 false 才双击 2200ms 内退出 + Toast"再按一次返回桌面"。
   - 外链跳系统浏览器（`Intent.ACTION_VIEW`）；console 日志进 Logcat，tag `CintyezOS`。
+- **KemonBridge.java**：`@JavascriptInterface` 暴露为 `window.CintyezNative`，`chat(id, url, key, body)` 在单线程池里用 `HttpURLConnection` POST OpenAI 兼容接口（连接 15s / 读 60s），再 `web.post` 回 `window.kemonChatReply(id, json)`。只允许 http/https；成功返回 `{ok:true, content, model}`，失败返回 `{ok:false, error}`。`onDestroy` 里 `shutdown()`。
 - **app/build.gradle**：`syncWeb` Copy 任务把 `../kemon-os-v2.html` 复制成 `index.html` 到 `generated/webAssets`，挂到 `preBuild`；versionCode/Name 可用 `-P` 覆盖（CI 用 run_number）。
 - Manifest：INTERNET、singleTask、竖屏、adjustResize、`enableOnBackInvokedCallback=false`。
 - 图标：`mipmap-*` 的 orb 图标用 Playwright 脚本从 app 自身 CSS 生成（临时目录 `C:\Users\User\AppData\Local\Temp\kemon-shot\make-icons.js`）。
@@ -112,6 +115,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：模型通道接通（原生 HTTP）
+
+- 新增 `KemonBridge.java`，`addJavascriptInterface(..., "CintyezNative")`；JS 侧 `kemonChat` 有桥走桥、无桥走 `fetch`。
+- 设置里的"测试连接"改为真实请求；Kemon 抽屉的回复改为真实推理，system prompt 里注入 `Info.last` 的分组结果。
+- 验证（浏览器 + 假 `CintyezNative`）：native 路径、fetch 路径、401 错误提示、测试连接、抽屉两轮消息均通过，控制台无报错。
+- **未验证**：真机上带真实 key 的请求；`http://` 局域网接口会被 Android 9+ 默认的 cleartext 策略挡住（当前只适合 https 接口）。
 
 ### 2026-10-24：信息层落地（mock 管线）
 

@@ -1909,7 +1909,7 @@ body{
             <span class="set-hint" id="cfgHint">仅保存在本机</span>
           </div>
         </div>
-        <p class="set-note">按 OpenAI 兼容格式预留。原型不会真的发起请求；桌面输入会从这里取配置。</p>
+        <p class="set-note">按 OpenAI 兼容格式填写。APK 里由原生代发请求，浏览器里直连可能被 CORS 拦住。</p>
       </section>
 
       <section class="set-sec">
@@ -4226,11 +4226,74 @@ function paintKemonStatus(){
   paintAgState();
 }
 
-/* 推理入口：原型不发起请求；接后端时改这里即可。 */
+/* 推理入口：APK 里走原生 HTTP（无 CORS），浏览器里直连（多数接口会被挡）。 */
+const chatWaiters = new Map();
+let chatSeq = 0;
+
+function nativeChat(url, key, body){
+  return new Promise((resolve, reject) => {
+    const id = ++chatSeq;
+    chatWaiters.set(id, { resolve, reject });
+    try {
+      window.CintyezNative.chat(id, url, key || '', body);
+    } catch (e){
+      chatWaiters.delete(id);
+      reject(e);
+    }
+  });
+}
+
+function kemonSystemPrompt(){
+  const d = Info.last;
+  const list = d
+    ? d.items.map(it => `- [${GROUP_META[it.group].label}] ${it.app} · ${it.title}：${it.text}`).join('\n')
+    : '（暂无）';
+  return '你是 Kemon Cintyez，住在 CintyezOS 里的 AI，不是助手。中文，回答简短直接。\n'
+    + '当前锁屏信息：\n' + list;
+}
+
+window.kemonChatReply = function(id, payload){
+  const waiter = chatWaiters.get(id);
+  if (!waiter) return;
+  chatWaiters.delete(id);
+  let d;
+  try { d = JSON.parse(payload); } catch (_) { waiter.reject(new Error('通道返回了无法解析的数据')); return; }
+  if (d.ok) waiter.resolve({ content: d.content || '', model: d.model || '' });
+  else waiter.reject(new Error(d.error || '模型请求失败'));
+};
+
 async function kemonChat(messages){
   const c = { ...KEMON.cfg };
   if (!c.base || !c.model) throw new Error('KEMON_NOT_CONFIGURED');
-  return { pending:true, model:c.model, messages };
+  const body = JSON.stringify({
+    model: c.model,
+    temperature: Number(c.temp) || 0.6,
+    messages
+  });
+
+  if (window.CintyezNative && window.CintyezNative.chat){
+    return nativeChat(c.base, c.key, body);
+  }
+
+  let res;
+  try {
+    res = await fetch(c.base, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(c.key ? { Authorization: 'Bearer ' + c.key } : {})
+      },
+      body
+    });
+  } catch (_){
+    throw new Error('浏览器直连被 CORS 拦住，装 APK 后走原生通道');
+  }
+  const text = await res.text();
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' · ' + text.slice(0, 160));
+  const data = JSON.parse(text);
+  const content = data && data.choices && data.choices[0] && data.choices[0].message
+    ? (data.choices[0].message.content || '') : '';
+  return { content, model: (data && data.model) || c.model };
 }
 window.kemon = {
   get config(){ return { ...KEMON.cfg }; },
@@ -4251,7 +4314,7 @@ cfgTemp.addEventListener('input', () => {
   cfgTempVal.textContent = Number(cfgTemp.value).toFixed(2);
   KEMON.read(); KEMON.save();
 });
-cfgTest.addEventListener('click', () => {
+cfgTest.addEventListener('click', async () => {
   KEMON.read(); KEMON.save(); paintKemonStatus();
   if (!KEMON.cfg.base || !KEMON.cfg.model){
     cfgHint.textContent = '缺少接口地址或模型'; cfgHint.className = 'set-hint bad'; return;
@@ -4267,12 +4330,19 @@ cfgTest.addEventListener('click', () => {
   cfgTest.disabled = true;
   cfgHint.textContent = '正在检查通道…';
   cfgHint.className = 'set-hint';
-  setTimeout(() => {
-    cfgTest.disabled = false;
-    cfgHint.textContent = '通道已就绪 · 原型不会真的请求';
+  try {
+    const r = await kemonChat([{ role:'user', content:'只回复 OK' }]);
+    cfgHint.textContent = r.content
+      ? '通道已就绪 · 模型回复：' + r.content.slice(0, 20)
+      : '通道已就绪';
     cfgHint.className = 'set-hint ok';
+  } catch (e){
+    cfgHint.textContent = '连接失败 · ' + (e && e.message ? e.message : e);
+    cfgHint.className = 'set-hint bad';
+  } finally {
+    cfgTest.disabled = false;
     paintKemonStatus();
-  }, 850);
+  }
 });
 
 /* =========================================================
@@ -4904,22 +4974,29 @@ function agSendMessage(){
   agThread.appendChild(typing);
   agScrollThread(true);
 
-  setTimeout(() => {
+  (async () => {
+    let reply;
+    if (!KEMON.connected()){
+      reply = '我先记下了。模型还没接入，接入后才能真正回答你。';
+      convo.needConnect = true;
+    } else {
+      const history = convo.msgs
+        .map(m => ({ role: m.r === 'u' ? 'user' : 'assistant', content: m.t }));
+      try {
+        const r = await kemonChat([{ role:'system', content: kemonSystemPrompt() }, ...history]);
+        reply = r.content.trim() || '（模型没有返回内容）';
+      } catch (e){
+        reply = '请求失败：' + (e && e.message ? e.message : e);
+      }
+    }
     typing.remove();
-    const ok = KEMON.connected();
-    convo.msgs.push({
-      r:'k',
-      t: ok
-        ? '收到。原型里不会真的发起请求；接上 ' + KEMON.cfg.model + ' 之后，这条消息会走真实推理。'
-        : '我先记下了。模型还没接入，接入后才能真正回答你。'
-    });
-    if (!ok) convo.needConnect = true;
+    convo.msgs.push({ r:'k', t: reply });
     agSend.disabled = false;
     if (agCurrent === convo && agEl.classList.contains('chat')){
       agRenderThread();
       agScrollThread(true);
     }
-  }, 780);
+  })();
 }
 
 function openAg(){
@@ -5097,7 +5174,7 @@ inputDock.addEventListener('submit', (e) => {
     setTimeout(openSettings, 420);
     return;
   }
-  promptSub.innerHTML = '已交给 <em>' + KEMON.cfg.model + '</em> · 推理通道待接入';
+  promptSub.innerHTML = '已交给 <em>' + KEMON.cfg.model + '</em> · 左缘侧滑继续对话';
   promptSub.classList.add('on');
   setTimeout(() => openMatrix(), 420);
 });

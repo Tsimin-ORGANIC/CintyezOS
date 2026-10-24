@@ -37,6 +37,7 @@ public class MainActivity extends Activity {
         "https://appassets.androidplatform.net/assets/index.html";
 
     private WebView web;
+    private KemonBridge bridge;
     private boolean imeVisible;
     private long lastBackAt;
 
@@ -111,6 +112,9 @@ public class MainActivity extends Activity {
         settings.setAllowContentAccess(false);
         settings.setGeolocationEnabled(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        bridge = new KemonBridge(web);
+        web.addJavascriptInterface(bridge, "CintyezNative");
 
         web.setWebViewClient(new WebViewClient() {
             private final WebViewAssetLoader assets = new WebViewAssetLoader.Builder()
@@ -240,6 +244,10 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (bridge != null) {
+            bridge.shutdown();
+            bridge = null;
+        }
         if (web != null) {
             web.setWebChromeClient(null);
             web.setWebViewClient(null);
