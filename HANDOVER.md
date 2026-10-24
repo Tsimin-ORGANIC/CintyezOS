@@ -33,8 +33,10 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
 - 模型通道 `kemonChat(messages, opts)`：有原生桥时走 APK 内 HTTP，否则浏览器 `fetch` 直连；返回 `{content, model}`，错误抛 `Error`。接口地址允许只填到 `/v1`，`chatEndpoint()` 会自动补 `/chat/completions`；HTTP 错误优先取 JSON 的 `error.message`，HTML 错误提示改地址。
   - 非流式走 `CintyezNative.chat`，回调 `window.kemonChatReply(id, payload)`。
   - 流式（`opts.onChunk`）走 `CintyezNative.chatStream`，原生解析 SSE 后分批回调 `window.kemonChatChunk(id, text)`，结束 `kemonChatDone(id)`，失败 `kemonChatError(id, msg)`；JS 侧累积全文，Promise 在 done 时 resolve。原生每 40ms 合并一次 chunk；非 SSE 响应会自动退回整段 JSON。
-- 主屏问答：`inputDock` 提交后走 `askHome()`，结果写进 `homeAsk`（`#home.asking` 让大标题退场、≤720px 短屏隐藏语音球），复用 `kemonChat` 的 `onChunk` 逐字渲染。对话对象 `homeConvo` 同时 `unshift` 进 `AG_SESSIONS`；「在 Kemon 里继续」直接 `openAgChat(homeConvo)`，主屏和抽屉共用同一份 `msgs`，后续追问带完整历史。
-- 回复渲染 `mdHTML()`：先 `agEsc` 整体转义，再按行分块（标题/列表/引用/代码块/表格/分隔线），最后处理行内标记；主屏 `.ha-a` 与抽屉 `.ag-msg.k` 加 `.md`，用户消息保持纯文本。链接只放行 http/https。流式期间在文本末尾塞 `MD_CURSOR`（`\uE000`），渲染时换成光标插进最后一段/列表项。**LaTeX 未支持**（需要 KaTeX，与单文件轻量冲突，公式按纯文本显示）。
+- 主屏问答：`inputDock` 提交后走 `askHome()`，结果写进 `homeAsk`（`#home.asking` 让大标题淡出隐藏、≤720px 短屏隐藏语音球），复用 `kemonChat` 的 `onChunk` 逐字渲染。对话对象 `homeConvo` 同时 `unshift` 进 `AG_SESSIONS`；「在 Kemon 里继续」把 `homeConvo` 交给 `openAgChat()` 后调用 `resetHomeAsk()`：主页恢复空状态、重算问候和副标题，下次提问新建会话，旧会话留在抽屉列表。
+- 主屏文案 `homeLine()`：按小时给问候（早/上午/中午/下午/晚/夜深），再结合 `Info.last` 的紧急、待办、人际数量生成一句现状；没有数据时退回 `HOME_FALLBACK`。`typeHome()` 逐字打出，`resetHomeAsk()` 直接重设。提问期间 `#home.asking .prompt-line{opacity:0}` 整行隐藏。
+- 回复渲染 `mdHTML()`：先 `agEsc` 整体转义，再按行分块（标题/列表/引用/代码块/表格/分隔线），最后处理行内标记；主屏 `.ha-a` 与抽屉 `.ag-msg.k` 加 `.md`，用户消息保持纯文本。链接只放行 http/https。流式期间在文本末尾塞 `MD_CURSOR`（`\uE000`），渲染时换成光标插进最后一段/列表项。
+- 公式：KaTeX 0.16.47 已整段内嵌（`<style id="katex-css">` + `<script id="katex-js">`，20 个 woff2 字体转 base64），离线可用。`mdHTML` 支持 `$…$`、`$$…$$`、`\(...\)`、`\[...\]`；代码块/行内代码里的 `$` 不解析，`$5`、`$6` 这类价格和转义的 `\$` 不会被误判。更新 KaTeX 用 `tools/bundle-katex.js`。
 - 架构：右侧快捷抽屉 + "更多设置"跳 Android 系统设置锚点 `#droid`；左侧 Kemon 代理抽屉；设置矩阵里只有唯一一个真图标。
 - 桌面边缘热区：`#leftEdgeZone`（左缘右滑开 Kemon）与 `#edgeZone`（右缘左滑开设置）均为 `top:88px; bottom:108px; width:30px`（2026-10-23 由 22px 加宽）。`updateEdgeZone()` 只在 `home/matrix` 且没有抽屉/设置/彩蛋打开时给它们加 `.on`。宽度必须 ≤ Android 的 `setSystemGestureExclusionRects` 排除区，否则外侧会被系统返回手势截走。
 - 本段新增的 Android 钩子：
@@ -121,6 +123,13 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：主页问候、会话迁移、内嵌 KaTeX
+
+- 大标题不再是固定文案：`homeLine()` 用小时问候 + `Info.last` 的紧急/待办/人际计数生成现状（如「中午好，先看 3 件事。」）；提问后整行淡出。
+- 「在 Kemon 里继续」改为迁移：先把会话交给抽屉，再 `resetHomeAsk()` 清空主页答案并恢复问候/副标题；下一次提问新建会话，旧会话保留在抽屉列表（已验证 `sessions` 递增、旧会话 `msgs` 不变）。
+- KaTeX 0.16.47 内嵌：CSS 内 20 个 woff2 字体转 base64，HTML 从 219KB 涨到约 852KB；`mdHTML` 支持 `$…$` / `$$…$$` / `\(...\)` / `\[...\]`，代码与价格不误判。维护脚本 `tools/bundle-katex.js`。
+- 验证（浏览器 + 假桥）：主屏/抽屉公式、aligned 多行、深色、360×640、流式半截公式（先原文后渲染）、迁移清空与二次会话、markdown 与主屏回归全部通过，无控制台报错。
 
 ### 2026-10-24：回复渲染 markdown
 
