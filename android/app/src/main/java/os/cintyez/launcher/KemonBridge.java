@@ -1,5 +1,8 @@
 package os.cintyez.launcher;
 
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
@@ -39,6 +42,21 @@ public class KemonBridge {
                 + id + "," + JSONObject.quote(payload) + ")";
             web.post(() -> web.evaluateJavascript(js, null));
         });
+    }
+
+    @JavascriptInterface
+    public String clipboard() {
+        try {
+            ClipboardManager cm = (ClipboardManager)
+                web.getContext().getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm == null || !cm.hasPrimaryClip()) return "";
+            ClipData clip = cm.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) return "";
+            CharSequence text = clip.getItemAt(0).coerceToText(web.getContext());
+            return text == null ? "" : text.toString();
+        } catch (Exception e) {
+            return "";
+        }
     }
 
     void shutdown() {

@@ -95,6 +95,8 @@ body{
   overscroll-behavior:none;
   transition:background .4s ease,color .4s ease;
 }
+/* 页面整体禁止选中，但输入框要能长按选择/粘贴 */
+input,textarea{user-select:text;-webkit-user-select:text;-webkit-touch-callout:default;}
 #app{position:fixed;inset:0;overflow:hidden;}
 
 /* 细颗粒：让大面积纯色不再像塑料 */
@@ -905,6 +907,11 @@ body{
 }
 .field input::placeholder{color:var(--fg-3);}
 .field input:focus{color:var(--flame-cu);}
+.field-paste{
+  flex:0 0 auto;border:1px solid var(--line);background:none;color:var(--fg-2);
+  font:inherit;font-size:11px;padding:4px 9px;border-radius:999px;
+}
+.field-paste:active{color:var(--flame-cu);border-color:var(--flame-cu);}
 .field b{
   width:34px;flex:0 0 auto;text-align:right;
   font-family:var(--mono);font-size:10px;font-weight:400;color:var(--fg-2);
@@ -1895,10 +1902,11 @@ body{
             <span>模型</span>
             <input id="cfgModel" type="text" placeholder="gpt-4o-mini" autocomplete="off" spellcheck="false">
           </label>
-          <label class="field">
+          <div class="field">
             <span>API Key</span>
             <input id="cfgKey" type="password" placeholder="sk-…" autocomplete="off">
-          </label>
+            <button type="button" class="field-paste" id="cfgPaste">粘贴</button>
+          </div>
           <label class="field">
             <span>温度</span>
             <input id="cfgTemp" type="range" min="0" max="1" step="0.05" value="0.6">
@@ -2489,6 +2497,7 @@ const setBadge    = $('setBadge');
 const cfgBase     = $('cfgBase');
 const cfgModel    = $('cfgModel');
 const cfgKey      = $('cfgKey');
+const cfgPaste    = $('cfgPaste');
 const cfgTemp     = $('cfgTemp');
 const cfgTempVal  = $('cfgTempVal');
 const cfgTest     = $('cfgTest');
@@ -4318,6 +4327,24 @@ window.kemon = {
 cfgTemp.addEventListener('input', () => {
   cfgTempVal.textContent = Number(cfgTemp.value).toFixed(2);
   KEMON.read(); KEMON.save();
+});
+cfgPaste.addEventListener('click', async () => {
+  let text = '';
+  if (window.CintyezNative && window.CintyezNative.clipboard){
+    text = String(window.CintyezNative.clipboard() || '');
+  } else {
+    try { text = await navigator.clipboard.readText(); } catch (_) {}
+  }
+  text = text.trim();
+  if (!text){
+    cfgHint.textContent = '剪贴板为空，或被系统拦住了';
+    cfgHint.className = 'set-hint bad';
+    return;
+  }
+  cfgKey.value = text;
+  cfgKey.dispatchEvent(new Event('input', { bubbles:true }));
+  cfgHint.textContent = '已粘贴 · 仅存于本机';
+  cfgHint.className = 'set-hint ok';
 });
 cfgTest.addEventListener('click', async () => {
   KEMON.read(); KEMON.save(); paintKemonStatus();

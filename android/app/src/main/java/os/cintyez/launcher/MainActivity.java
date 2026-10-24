@@ -95,8 +95,6 @@ public class MainActivity extends Activity {
     private void configureWebView() {
         web.setBackgroundColor(getColor(R.color.bg));
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        web.setLongClickable(false);
-        web.setOnLongClickListener(v -> true);
         web.setHapticFeedbackEnabled(false);
 
         WebSettings settings = web.getSettings();

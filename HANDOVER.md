@@ -48,6 +48,8 @@ CintyezOS 是一台 AI 手机的**可交互设计稿**：单文件 HTML（`kemon
   - 返回键：先 `evaluateJavascript` 调 `window.kemonAndroidBack()`，返回 false 才双击 2200ms 内退出 + Toast"再按一次返回桌面"。
   - 外链跳系统浏览器（`Intent.ACTION_VIEW`）；console 日志进 Logcat，tag `CintyezOS`。
 - **KemonBridge.java**：`@JavascriptInterface` 暴露为 `window.CintyezNative`，`chat(id, url, key, body)` 在单线程池里用 `HttpURLConnection` POST OpenAI 兼容接口（连接 15s / 读 60s），再 `web.post` 回 `window.kemonChatReply(id, json)`。只允许 http/https；成功返回 `{ok:true, content, model}`，失败返回 `{ok:false, error}`。`onDestroy` 里 `shutdown()`。
+  - `clipboard()`：读系统剪贴板返回字符串（失败返回空串）。设置里的「粘贴」按钮用它兜底——部分 ROM 的安全键盘会屏蔽密码框的长按粘贴。
+- 长按/选中：**不要**再给 WebView 调 `setLongClickable(false)`（会连输入框的粘贴菜单一起禁掉）。选择范围由 CSS 控制：`body` 禁止选中，`input,textarea` 允许。
 - **app/build.gradle**：`syncWeb` Copy 任务把 `../kemon-os-v2.html` 复制成 `index.html` 到 `generated/webAssets`，挂到 `preBuild`；versionCode/Name 可用 `-P` 覆盖（CI 用 run_number）。
 - Manifest：INTERNET、singleTask、竖屏、adjustResize、`enableOnBackInvokedCallback=false`。
 - 图标：`mipmap-*` 的 orb 图标用 Playwright 脚本从 app 自身 CSS 生成（临时目录 `C:\Users\User\AppData\Local\Temp\kemon-shot\make-icons.js`）。
@@ -115,6 +117,12 @@ java.lang.NullPointerException: Attempt to invoke virtual method
 - 愿景原始出处：`F:\DeepChat\ldahgrk5rm6fx6vf9o.md`（DeepSeek 导出）。
 
 ## 10. 最近改动记录
+
+### 2026-10-24：修复 API Key 无法粘贴
+
+- 原因有两层：HTML `body` 全局 `user-select:none`，Android 侧又 `setLongClickable(false)` + 吞掉 long click，长按菜单完全出不来。
+- 修复：去掉原生长按屏蔽；CSS 只对 `input,textarea` 恢复选择；API Key 行加「粘贴」按钮，走 `CintyezNative.clipboard()` 读系统剪贴板，绕开安全键盘的粘贴限制。
+- 验证：浏览器里计算样式为 `user-select:text`，假剪贴板粘贴后输入框和 localStorage 都正确，空剪贴板提示正常。
 
 ### 2026-10-24：模型通道接通（原生 HTTP）
 
