@@ -88,23 +88,8 @@ jobs:
           emulator-options: >-
             -no-window -no-audio -no-boot-anim -no-snapshot
             -gpu swiftshader_indirect
-          script: |
-            DIR="smoke/api-${{ matrix.api-level }}"
-            mkdir -p "$DIR"
-            adb install -r CintyezOS.apk | tee "$DIR/install.txt"
-            adb shell am start -W -n os.cintyez.launcher/.MainActivity | tee "$DIR/am-start.txt"
-            sleep 12
-            PID=$(adb shell pidof os.cintyez.launcher | tr -d '\r')
-            echo "pid=[$PID]" | tee "$DIR/pid.txt"
-            adb logcat -b crash -d > "$DIR/crash.txt"
-            adb logcat -d > "$DIR/logcat.txt"
-            adb shell dumpsys activity exit-info os.cintyez.launcher > "$DIR/exit-info.txt" 2>&1
-            adb shell dumpsys window displays > "$DIR/displays.txt" 2>&1
-            adb exec-out screencap -p > "$DIR/screen.png"
-            echo "=== crash buffer ==="
-            cat "$DIR/crash.txt" | head -n 120
-            echo "=== app logcat ==="
-            grep -E "FATAL EXCEPTION|AndroidRuntime|CintyezOS|cintyez" -A 60 "$DIR/logcat.txt" | head -n 300 || true
+          # 这个 action 按行执行 script，变量不会跨行保留，所以逻辑放在脚本文件里
+          script: bash .github/scripts/android-smoke.sh ${{ matrix.api-level }}
 
       - name: Upload logs
         if: always()
