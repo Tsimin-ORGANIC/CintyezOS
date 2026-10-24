@@ -3,6 +3,7 @@ package os.cintyez.launcher;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.os.SystemClock;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
 
@@ -19,7 +20,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-/* WebView 直连模型接口会被 CORS 挡；这里用原生 HTTP 代发，JS 通过 CintyezNative.chat 调用。 */
+/* WebView 直连模型接口会被 CORS 挡；这里用原生 HTTP 代发，JS 通过 CintyezNative 调用。 */
 public class KemonBridge {
     private final WebView web;
     private final ExecutorService pool = Executors.newSingleThreadExecutor();
@@ -35,13 +36,15 @@ public class KemonBridge {
             try {
                 payload = request(url, key, body);
             } catch (Exception e) {
-                String msg = e.getMessage();
-                payload = error(msg == null ? e.getClass().getSimpleName() : msg);
+                payload = error(messageOf(e));
             }
-            String js = "window.kemonChatReply&&window.kemonChatReply("
-                + id + "," + JSONObject.quote(payload) + ")";
-            web.post(() -> web.evaluateJavascript(js, null));
+            emit(id, "kemonChatReply", payload);
         });
+    }
+
+    @JavascriptInterface
+    public void chatStream(int id, String url, String key, String body) {
+        pool.execute(() -> stream(id, url, key, body));
     }
 
     @JavascriptInterface
@@ -63,7 +66,77 @@ public class KemonBridge {
         pool.shutdownNow();
     }
 
+    private void stream(int id, String url, String key, String body) {
+        HttpURLConnection conn = null;
+        try {
+            conn = open(url, key, body, true);
+            int code = conn.getResponseCode();
+            InputStream in = code >= 200 && code < 300
+                ? conn.getInputStream() : conn.getErrorStream();
+
+            if (code < 200 || code >= 300) {
+                emit(id, "kemonChatError", describeError(code, read(in)));
+                return;
+            }
+
+            String type = conn.getContentType();
+            if (type == null || !type.contains("text/event-stream")) {
+                String content = contentOf(new JSONObject(read(in)));
+                if (!content.isEmpty()) emit(id, "kemonChatChunk", content);
+                emit(id, "kemonChatDone", "");
+                return;
+            }
+
+            BufferedReader reader = new BufferedReader(
+                new InputStreamReader(in, StandardCharsets.UTF_8));
+            StringBuilder pending = new StringBuilder();
+            long last = 0;
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (!line.startsWith("data:")) continue;
+                String data = line.substring(5).trim();
+                if ("[DONE]".equals(data)) break;
+                String piece = deltaOf(data);
+                if (piece.isEmpty()) continue;
+                pending.append(piece);
+                long now = SystemClock.uptimeMillis();
+                if (now - last >= 40) {
+                    emit(id, "kemonChatChunk", pending.toString());
+                    pending.setLength(0);
+                    last = now;
+                }
+            }
+            if (pending.length() > 0) emit(id, "kemonChatChunk", pending.toString());
+            emit(id, "kemonChatDone", "");
+        } catch (Exception e) {
+            emit(id, "kemonChatError", messageOf(e));
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
     private String request(String url, String key, String body) throws Exception {
+        HttpURLConnection conn = open(url, key, body, false);
+        try {
+            int code = conn.getResponseCode();
+            InputStream in = code >= 200 && code < 300
+                ? conn.getInputStream() : conn.getErrorStream();
+            String text = read(in);
+            if (code < 200 || code >= 300) return error(describeError(code, text));
+
+            JSONObject root = new JSONObject(text);
+            return new JSONObject()
+                .put("ok", true)
+                .put("content", contentOf(root))
+                .put("model", root.optString("model", ""))
+                .toString();
+        } finally {
+            conn.disconnect();
+        }
+    }
+
+    private HttpURLConnection open(String url, String key, String body, boolean stream)
+        throws Exception {
         URL target = new URL(url);
         String scheme = target.getProtocol();
         if (!"https".equals(scheme) && !"http".equals(scheme)) {
@@ -73,35 +146,53 @@ public class KemonBridge {
         HttpURLConnection conn = (HttpURLConnection) target.openConnection();
         conn.setRequestMethod("POST");
         conn.setConnectTimeout(15000);
-        conn.setReadTimeout(60000);
+        conn.setReadTimeout(90000);
         conn.setDoOutput(true);
         conn.setRequestProperty("Content-Type", "application/json");
+        if (stream) conn.setRequestProperty("Accept", "text/event-stream");
         if (key != null && !key.isEmpty()) {
             conn.setRequestProperty("Authorization", "Bearer " + key);
         }
         try (OutputStream out = conn.getOutputStream()) {
             out.write(body.getBytes(StandardCharsets.UTF_8));
         }
+        return conn;
+    }
 
-        int code = conn.getResponseCode();
-        InputStream in = code >= 200 && code < 300 ? conn.getInputStream() : conn.getErrorStream();
-        String text = read(in);
-        if (code < 200 || code >= 300) {
-            return error(describeError(code, text));
+    private static String deltaOf(String data) {
+        try {
+            JSONObject root = new JSONObject(data);
+            JSONArray choices = root.optJSONArray("choices");
+            if (choices == null || choices.length() == 0) return "";
+            JSONObject choice = choices.getJSONObject(0);
+            JSONObject delta = choice.optJSONObject("delta");
+            if (delta != null) return delta.optString("content", "");
+            JSONObject message = choice.optJSONObject("message");
+            return message == null ? "" : message.optString("content", "");
+        } catch (Exception e) {
+            return "";
         }
+    }
 
-        JSONObject root = new JSONObject(text);
+    private static String contentOf(JSONObject root) {
         JSONArray choices = root.optJSONArray("choices");
-        String content = "";
-        if (choices != null && choices.length() > 0) {
-            JSONObject message = choices.getJSONObject(0).optJSONObject("message");
-            if (message != null) content = message.optString("content", "");
-        }
-        return new JSONObject()
-            .put("ok", true)
-            .put("content", content)
-            .put("model", root.optString("model", ""))
-            .toString();
+        if (choices == null || choices.length() == 0) return "";
+        JSONObject message = choices.optJSONObject(0);
+        if (message == null) return "";
+        JSONObject body = message.optJSONObject("message");
+        return body == null ? "" : body.optString("content", "");
+    }
+
+    private void emit(int id, String fn, String text) {
+        String js = "window." + fn + "&&window." + fn + "("
+            + id + "," + JSONObject.quote(text) + ")";
+        web.post(() -> {
+            try {
+                web.evaluateJavascript(js, null);
+            } catch (Exception ignored) {
+                // WebView 已销毁，回调直接丢弃
+            }
+        });
     }
 
     private static String read(InputStream in) throws Exception {
@@ -131,6 +222,11 @@ public class KemonBridge {
             // 不是 JSON，退回原文
         }
         return "HTTP " + code + " · " + cut(body, 160);
+    }
+
+    private static String messageOf(Exception e) {
+        String message = e.getMessage();
+        return message == null || message.isEmpty() ? e.getClass().getSimpleName() : message;
     }
 
     private static String error(String message) {

@@ -4240,15 +4240,19 @@ function paintKemonStatus(){
 const chatWaiters = new Map();
 let chatSeq = 0;
 
-function nativeChat(url, key, body){
+function nativeChat(url, key, body, onChunk){
   return new Promise((resolve, reject) => {
     const id = ++chatSeq;
     const timer = setTimeout(() => {
       if (chatWaiters.delete(id)) reject(new Error('模型响应超时'));
-    }, 90000);
-    chatWaiters.set(id, { resolve, reject, timer });
+    }, onChunk ? 180000 : 90000);
+    chatWaiters.set(id, { resolve, reject, timer, onChunk, text:'' });
     try {
-      window.CintyezNative.chat(id, url, key || '', body);
+      if (onChunk && window.CintyezNative.chatStream){
+        window.CintyezNative.chatStream(id, url, key || '', body);
+      } else {
+        window.CintyezNative.chat(id, url, key || '', body);
+      }
     } catch (e){
       clearTimeout(timer);
       chatWaiters.delete(id);
@@ -4277,23 +4281,50 @@ window.kemonChatReply = function(id, payload){
   else waiter.reject(new Error(d.error || '模型请求失败'));
 };
 
+window.kemonChatChunk = function(id, chunk){
+  const waiter = chatWaiters.get(id);
+  if (!waiter) return;
+  waiter.text += chunk;
+  if (waiter.onChunk){
+    try { waiter.onChunk(waiter.text); } catch (_) {}
+  }
+};
+
+window.kemonChatDone = function(id){
+  const waiter = chatWaiters.get(id);
+  if (!waiter) return;
+  clearTimeout(waiter.timer);
+  chatWaiters.delete(id);
+  waiter.resolve({ content: waiter.text, model: KEMON.cfg.model });
+};
+
+window.kemonChatError = function(id, message){
+  const waiter = chatWaiters.get(id);
+  if (!waiter) return;
+  clearTimeout(waiter.timer);
+  chatWaiters.delete(id);
+  waiter.reject(new Error(message || '模型请求失败'));
+};
+
 /* 允许只填到 /v1；已经是完整端点就原样使用。 */
 function chatEndpoint(base){
   const u = String(base || '').trim().replace(/\/+$/, '');
   return /\/chat\/completions$/.test(u) ? u : u + '/chat/completions';
 }
 
-async function kemonChat(messages){
+async function kemonChat(messages, opts){
   const c = { ...KEMON.cfg };
   if (!c.base || !c.model) throw new Error('KEMON_NOT_CONFIGURED');
+  const onChunk = opts && typeof opts.onChunk === 'function' ? opts.onChunk : null;
   const body = JSON.stringify({
     model: c.model,
     temperature: Number(c.temp) || 0.6,
-    messages
+    messages,
+    ...(onChunk ? { stream: true } : {})
   });
 
-  if (window.CintyezNative && window.CintyezNative.chat){
-    return nativeChat(chatEndpoint(c.base), c.key, body);
+  if (window.CintyezNative && (window.CintyezNative.chat || window.CintyezNative.chatStream)){
+    return nativeChat(chatEndpoint(c.base), c.key, body, onChunk);
   }
 
   let res;
@@ -4323,6 +4354,7 @@ async function kemonChat(messages){
   const data = JSON.parse(text);
   const content = data && data.choices && data.choices[0] && data.choices[0].message
     ? (data.choices[0].message.content || '') : '';
+  if (onChunk && content) onChunk(content);
   return { content, model: (data && data.model) || c.model };
 }
 window.kemon = {
@@ -5024,6 +5056,7 @@ function agSendMessage(){
 
   (async () => {
     let reply;
+    let bubble = null;
     if (!KEMON.connected()){
       reply = '我先记下了。模型还没接入，接入后才能真正回答你。';
       convo.needConnect = true;
@@ -5031,13 +5064,29 @@ function agSendMessage(){
       const history = convo.msgs
         .map(m => ({ role: m.r === 'u' ? 'user' : 'assistant', content: m.t }));
       try {
-        const r = await kemonChat([{ role:'system', content: kemonSystemPrompt() }, ...history]);
+        const r = await kemonChat(
+          [{ role:'system', content: kemonSystemPrompt() }, ...history],
+          {
+            onChunk(text){
+              if (!bubble){
+                typing.remove();
+                bubble = agAddMsg('k', '');
+              }
+              bubble.textContent = text;
+              agThread.scrollTop = agThread.scrollHeight;
+            }
+          }
+        );
         reply = r.content.trim() || '（模型没有返回内容）';
       } catch (e){
-        reply = '请求失败：' + (e && e.message ? e.message : e);
+        const msg = e && e.message ? e.message : e;
+        reply = bubble
+          ? bubble.textContent + '\n\n（中断：' + msg + '）'
+          : '请求失败：' + msg;
       }
     }
     typing.remove();
+    if (bubble) bubble.remove();
     convo.msgs.push({ r:'k', t: reply });
     agSend.disabled = false;
     if (agCurrent === convo && agEl.classList.contains('chat')){
